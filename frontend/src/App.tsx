@@ -13,10 +13,22 @@ import { agent } from './services/agent';
 import { authService } from './services/auth';
 
 const App: React.FC = () => {
+  const tabToUrl: Record<string, string> = {
+    'dashboard': 'dashboard',
+    'leads': 'leads',
+    'campaigns': 'campaigns',
+    'logs': 'agent-logs',
+    'settings': 'settings',
+    'admin': 'admin'
+  };
+
+  const urlToTab: Record<string, string> = Object.fromEntries(
+    Object.entries(tabToUrl).map(([tab, url]) => [url, tab])
+  );
+
   const getInitialTab = () => {
     const path = window.location.pathname.replace('/', '') || 'dashboard';
-    const validTabs = ['dashboard', 'leads', 'campaigns', 'logs', 'settings', 'admin'];
-    return validTabs.includes(path) ? path : 'dashboard';
+    return urlToTab[path] || 'dashboard';
   };
 
   const [activeTab, setActiveTab] = useState(getInitialTab());
@@ -25,10 +37,11 @@ const App: React.FC = () => {
 
   // Sync URL with activeTab
   useEffect(() => {
-    const currentPath = window.location.pathname.replace('/', '') || 'dashboard';
-    if (activeTab !== currentPath) {
-      const newPath = activeTab === 'dashboard' ? '/' : `/${activeTab}`;
-      window.history.pushState({ tab: activeTab }, '', newPath);
+    const currentUrlPath = window.location.pathname.replace('/', '');
+    const targetUrlPath = tabToUrl[activeTab];
+    
+    if (currentUrlPath !== targetUrlPath) {
+      window.history.pushState({ tab: activeTab }, '', `/${targetUrlPath}`);
     }
   }, [activeTab]);
 
@@ -66,7 +79,7 @@ const App: React.FC = () => {
         setActiveTab(e.state.tab);
       } else {
         const path = window.location.pathname.replace('/', '') || 'dashboard';
-        setActiveTab(path);
+        setActiveTab(urlToTab[path] || 'dashboard');
       }
     };
     window.addEventListener('popstate', handlePopState);
