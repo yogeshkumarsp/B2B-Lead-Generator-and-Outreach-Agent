@@ -1,6 +1,8 @@
 import React from 'react';
 import { LayoutDashboard, Users, Layers, Terminal, Settings, Play, Pause, Bot, Circle, ShieldCheck } from 'lucide-react';
 import { authService } from '../services/auth';
+import { store } from '../services/store';
+import { agent } from '../services/agent';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -21,8 +23,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, agent
   const toggleAgent = (e: React.MouseEvent) => {
     e.stopPropagation();
     const newState = !agentEnabled;
-    const { store } = require('../services/store');
-    const { agent } = require('../services/agent');
     store.updateSettings({ isAgentEnabled: newState });
     if (newState) agent.start();
     else agent.stop();
