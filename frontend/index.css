@@ -1,0 +1,40 @@
+/* Custom High-Impact Styles */
+
+body {
+    background-color: #f8fafc;
+    /* slate-50 */
+    background-attachment: fixed;
+}
+
+.highlight-yellow {
+    position: relative;
+    z-index: 1;
+    white-space: nowrap;
+}
+
+.highlight-yellow::after {
+    content: "";
+    position: absolute;
+    left: -2px;
+    right: -2px;
+    bottom: 0.1em;
+    height: 0.5em;
+    background-color: #fff9b1;
+    z-index: -1;
+    border-radius: 2px;
+    transform: rotate(-1deg);
+    transition: all 0.3s ease;
+}
+
+.high-impact-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.high-impact-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0, 82, 204, 0.05);
+}
+
+.high-impact-gradient {
+    background: linear-gradient(135deg, #0052cc 0%, #0065ff 100%);
+}

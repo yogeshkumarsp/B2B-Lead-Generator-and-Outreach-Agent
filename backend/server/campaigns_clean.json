@@ -1,0 +1,118 @@
+[
+  {
+    "id": "18c03746-c6eb-4db2-a273-022a6165d8a8",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "name": "software companies - krishnagiri",
+    "description": "Automated 5-step sequence for software companies in krishnagiri",
+    "scoreThreshold": 70,
+    "maxDailySends": 50,
+    "followUpDelayDays": 2,
+    "status": "ACTIVE",
+    "createdAt": "2026-03-10T06:59:00.456Z",
+    "steps": [
+      {
+        "id": "d17673f7-4349-4256-9733-6d2ca41707a6",
+        "campaignId": "18c03746-c6eb-4db2-a273-022a6165d8a8",
+        "step": 1,
+        "dayDelay": 0,
+        "templateName": "intro",
+        "subject": "Question about {Company Name}'s outreach automation",
+        "body": "Hi,\n\nI came across {Company Name} while researching software companies in krishnagiri. \n\nI’m the creator of an AI-powered lead generation tool, and I'm reaching out to see if your team is looking to automate your B2B outreach and prospect discovery.\n\nWould love to hear how you currently handle this and if our automation could help.\n\nBest regards,\nYogesh Kumar"
+      },
+      {
+        "id": "d3ea00bf-1365-4655-bdc8-f6dcf653275d",
+        "campaignId": "18c03746-c6eb-4db2-a273-022a6165d8a8",
+        "step": 2,
+        "dayDelay": 2,
+        "templateName": "problem",
+        "subject": "Automating lead discovery for software companies",
+        "body": "Hi,\n\nMany companies in your industry spend hours manually finding and scoring leads. \n\nWe built an AI platform that handles this discovery 24/7 so you can focus on closing deals.\n\nCurious to know — how does {Company Name} currently generate new B2B leads?\n\nBest regards,\nYogesh Kumar"
+      },
+      {
+        "id": "ae45beae-000d-42b6-9d1b-6d25f6358343",
+        "campaignId": "18c03746-c6eb-4db2-a273-022a6165d8a8",
+        "step": 3,
+        "dayDelay": 4,
+        "templateName": "idea",
+        "subject": "Our AI agent for {Company Name}",
+        "body": "Hi,\n\nI’m developing an AI agent platform specifically for personalized B2B outreach.\n\nSince you’re at {Company Name}, I thought you'd be interested in seeing how we automate the entire top-of-funnel process.\n\nDo you think a tool like this could help your sales team?\n\nBest regards,\nYogesh Kumar"
+      },
+      {
+        "id": "d4e9f25f-1ead-4bc0-9ac6-b835b59b682e",
+        "campaignId": "18c03746-c6eb-4db2-a273-022a6165d8a8",
+        "step": 4,
+        "dayDelay": 6,
+        "templateName": "local",
+        "subject": "Connecting with software companies in krishnagiri",
+        "body": "Hi,\n\nI’m currently connecting with a few businesses in krishnagiri to show how our AI tools help automate B2B lead generation.\n\nI'd love to share how {Company Name} can find more clients automatically.\n\nBest regards,\nYogesh Kumar"
+      },
+      {
+        "id": "a78ccd71-d162-434c-a434-340e23b91a58",
+        "campaignId": "18c03746-c6eb-4db2-a273-022a6165d8a8",
+        "step": 5,
+        "dayDelay": 8,
+        "templateName": "final",
+        "subject": "Final follow-up: outreach automation",
+        "body": "Hi,\n\nJust checking again — how does {Company Name} currently find new B2B clients? \n\nIf you're interested in automating your lead generation with AI, I'd love to chat.\n\nBest regards,\nYogesh Kumar"
+      }
+    ]
+  },
+  {
+    "id": "8f209254-e417-42f0-9c70-22eec959abef",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "name": "digital marketing agencies - krishnagiri",
+    "description": "Automated 5-step sequence for digital marketing agencies in krishnagiri",
+    "scoreThreshold": 70,
+    "maxDailySends": 50,
+    "followUpDelayDays": 2,
+    "status": "ACTIVE",
+    "createdAt": "2026-03-10T07:57:30.037Z",
+    "steps": [
+      {
+        "id": "87996a48-7e47-43da-b6c2-407202db79b8",
+        "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+        "step": 1,
+        "dayDelay": 0,
+        "templateName": "intro",
+        "subject": "Question about {Company Name}'s outreach automation",
+        "body": "Hi,\n\nI came across {Company Name} while researching digital marketing agencies in krishnagiri. \n\nI’m the creator of an AI-powered lead generation tool, and I'm reaching out to see if your team is looking to automate your B2B outreach and prospect discovery.\n\nWould love to hear how you currently handle this and if our automation could help.\n\nBest regards,\nYogesh Kumar"
+      },
+      {
+        "id": "8300cea9-0c02-49c2-aab5-0ef93804e14d",
+        "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+        "step": 2,
+        "dayDelay": 2,
+        "templateName": "problem",
+        "subject": "Automating lead discovery for digital marketing agencies",
+        "body": "Hi,\n\nMany companies in your industry spend hours manually finding and scoring leads. \n\nWe built an AI platform that handles this discovery 24/7 so you can focus on closing deals.\n\nCurious to know — how does {Company Name} currently generate new B2B leads?\n\nBest regards,\nYogesh Kumar"
+      },
+      {
+        "id": "6c384d46-9ed3-4818-a8eb-6ad9f3cf8b05",
+        "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+        "step": 3,
+        "dayDelay": 4,
+        "templateName": "idea",
+        "subject": "Our AI agent for {Company Name}",
+        "body": "Hi,\n\nI’m developing an AI agent platform specifically for personalized B2B outreach.\n\nSince you’re at {Company Name}, I thought you'd be interested in seeing how we automate the entire top-of-funnel process.\n\nDo you think a tool like this could help your sales team?\n\nBest regards,\nYogesh Kumar"
+      },
+      {
+        "id": "35b5d120-c1b3-4d46-8518-ed7e3789a26f",
+        "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+        "step": 4,
+        "dayDelay": 6,
+        "templateName": "local",
+        "subject": "Connecting with digital marketing agencies in krishnagiri",
+        "body": "Hi,\n\nI’m currently connecting with a few businesses in krishnagiri to show how our AI tools help automate B2B lead generation.\n\nI'd love to share how {Company Name} can find more clients automatically.\n\nBest regards,\nYogesh Kumar"
+      },
+      {
+        "id": "c33ea9be-863b-4916-b216-d255b40d5e6b",
+        "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+        "step": 5,
+        "dayDelay": 8,
+        "templateName": "final",
+        "subject": "Final follow-up: outreach automation",
+        "body": "Hi,\n\nJust checking again — how does {Company Name} currently find new B2B clients? \n\nIf you're interested in automating your lead generation with AI, I'd love to chat.\n\nBest regards,\nYogesh Kumar"
+      }
+    ]
+  }
+]

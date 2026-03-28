@@ -1,0 +1,152 @@
+[
+  {
+    "id": "73765923-477c-4138-b277-5837346dc3cb",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "INFO",
+    "module": "OUTREACH",
+    "message": "Step 1 ready for Contentfeeds.",
+    "leadId": "7e353ab1-3f2c-4432-b2f0-72a841522618",
+    "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+    "timestamp": "2026-03-10T07:58:09.932Z"
+  },
+  {
+    "id": "85221e18-b2f2-4613-9b64-76234ff2f392",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "ACTION",
+    "module": "OUTREACH",
+    "message": "Drafting Sequence Step 1 for Contentfeeds...",
+    "leadId": "7e353ab1-3f2c-4432-b2f0-72a841522618",
+    "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+    "timestamp": "2026-03-10T07:58:04.025Z"
+  },
+  {
+    "id": "8998bf0d-98c6-4074-b279-72b39a9c7d2b",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "INFO",
+    "module": "OUTREACH",
+    "message": "Step 1 ready for admax advertising.",
+    "leadId": "e3c106e8-5b29-4d64-a65d-45eac443ebb9",
+    "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+    "timestamp": "2026-03-10T07:58:04.024Z"
+  },
+  {
+    "id": "afd78ee3-60fa-40d5-9080-a1324d0f58c3",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "ACTION",
+    "module": "OUTREACH",
+    "message": "Drafting Sequence Step 1 for admax advertising...",
+    "leadId": "e3c106e8-5b29-4d64-a65d-45eac443ebb9",
+    "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+    "timestamp": "2026-03-10T07:57:57.873Z"
+  },
+  {
+    "id": "81b5dff5-3644-4404-b5bc-2affc8855a7e",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "INFO",
+    "module": "OUTREACH",
+    "message": "Step 1 ready for Youths Media.",
+    "leadId": "c86f14ee-ca38-47d0-abd3-ddae762716f1",
+    "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+    "timestamp": "2026-03-10T07:57:57.576Z"
+  },
+  {
+    "id": "04b85a7f-4ff2-44de-9728-9e1b3a8fe72d",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "ACTION",
+    "module": "OUTREACH",
+    "message": "Drafting Sequence Step 1 for Youths Media...",
+    "leadId": "c86f14ee-ca38-47d0-abd3-ddae762716f1",
+    "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+    "timestamp": "2026-03-10T07:57:53.434Z"
+  },
+  {
+    "id": "3ea50f1f-aaaf-465c-a55f-e335ec255dba",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "INFO",
+    "module": "OUTREACH",
+    "message": "Step 1 ready for VineAtZ OPC Private Limited.",
+    "leadId": "8614d267-b68a-48f4-bca9-b1757fad797b",
+    "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+    "timestamp": "2026-03-10T07:57:53.432Z"
+  },
+  {
+    "id": "a4824540-6ef4-40d6-ab50-93d04e13299b",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "ACTION",
+    "module": "OUTREACH",
+    "message": "Drafting Sequence Step 1 for VineAtZ OPC Private Limited...",
+    "leadId": "8614d267-b68a-48f4-bca9-b1757fad797b",
+    "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+    "timestamp": "2026-03-10T07:57:48.651Z"
+  },
+  {
+    "id": "5c4c11a9-6540-4f32-a309-f574106aa0d4",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "INFO",
+    "module": "OUTREACH",
+    "message": "Step 1 ready for Grofast.",
+    "leadId": "c10668e3-f675-488a-8a22-beca2bffba5f",
+    "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+    "timestamp": "2026-03-10T07:57:48.350Z"
+  },
+  {
+    "id": "093e4b75-a2bb-47dc-9f4a-c875945b9b06",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "ACTION",
+    "module": "OUTREACH",
+    "message": "Drafting Sequence Step 1 for Grofast...",
+    "leadId": "c10668e3-f675-488a-8a22-beca2bffba5f",
+    "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+    "timestamp": "2026-03-10T07:57:44.443Z"
+  },
+  {
+    "id": "63f0579a-6470-4eab-b7b9-6a6549d7f877",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "INFO",
+    "module": "OUTREACH",
+    "message": "Step 1 ready for SKY X Digi Solutions.",
+    "leadId": "4c90803b-1df5-42c2-8b57-d6596963d6bd",
+    "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+    "timestamp": "2026-03-10T07:57:44.442Z"
+  },
+  {
+    "id": "5c5bc2a9-4b61-4241-9f44-476ec5d095f4",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "ACTION",
+    "module": "OUTREACH",
+    "message": "Drafting Sequence Step 1 for SKY X Digi Solutions...",
+    "leadId": "4c90803b-1df5-42c2-8b57-d6596963d6bd",
+    "campaignId": "8f209254-e417-42f0-9c70-22eec959abef",
+    "timestamp": "2026-03-10T07:57:37.335Z"
+  },
+  {
+    "id": "b5ac6bfe-4514-4ad6-b82f-3fbadaaf59f4",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "INFO",
+    "module": "OUTREACH",
+    "message": "Step 1 ready for Vindhya E-infomedia Pvt. Ltd..",
+    "leadId": "eb40ad52-1eb6-4c95-8909-37060f5bf5e3",
+    "campaignId": "18c03746-c6eb-4db2-a273-022a6165d8a8",
+    "timestamp": "2026-03-10T07:13:18.274Z"
+  },
+  {
+    "id": "be9dc3ff-7e10-469d-a1d8-c70d0b271508",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "ACTION",
+    "module": "OUTREACH",
+    "message": "Drafting Sequence Step 1 for Vindhya E-infomedia Pvt. Ltd....",
+    "leadId": "eb40ad52-1eb6-4c95-8909-37060f5bf5e3",
+    "campaignId": "18c03746-c6eb-4db2-a273-022a6165d8a8",
+    "timestamp": "2026-03-10T07:13:12.626Z"
+  },
+  {
+    "id": "8ed7ce29-7557-4efe-a5b7-941197dc9818",
+    "userId": "628a7b05-8709-4735-8049-42f1d2573c8b",
+    "level": "INFO",
+    "module": "OUTREACH",
+    "message": "Step 1 ready for Zettaone Technologies India Private Limited (Krishnagiri).",
+    "leadId": "05bde631-037b-494b-a352-6c594728000d",
+    "campaignId": "18c03746-c6eb-4db2-a273-022a6165d8a8",
+    "timestamp": "2026-03-10T07:13:12.625Z"
+  }
+]

@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String        @id @default(uuid())
+  email         String        @unique
+  passwordHash  String?
+  name          String?
+  role          String        @default("USER")
+  ssoProviderId String?
+  ssoProvider   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  logs          AgentLog[]
+  tokens        AuthToken[]
+  campaigns     Campaign[]
+  leads         Lead[]
+  settings      UserSettings?
+}
+
+model AuthToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  type      String
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AccessRequest {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  companyName  String
+  role         String
+  reason       String
+  status       String   @default("PENDING")
+  createdAt    DateTime @default(now())
+  gender       String?
+  passwordHash String?
+}
+
+model UserSettings {
+  id                            String   @id @default(uuid())
+  userId                        String   @unique
+  agentPersona                  String   @default("You are a senior SDR. Write concise, professional outreach emails.")
+  dailySendLimit                Int      @default(50)
+  hourlyThrottleLimit           Int      @default(10)
+  replyDetectionIntervalMinutes Int      @default(30)
+  isAgentEnabled                Boolean  @default(false)
+  updatedAt                     DateTime @updatedAt
+  senderEmail                   String?
+  senderName                    String?
+  user                          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SystemLock {
+  id        String   @id @default("AGENT_LOCK")
+  updatedAt DateTime @updatedAt
+}
+
+model AgentLog {
+  id         String   @id @default(uuid())
+  userId     String
+  level      String
+  module     String
+  message    String
+  leadId     String?
+  campaignId String?
+  timestamp  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Lead {
+  id              String    @id @default(uuid())
+  userId          String
+  companyName     String
+  industry        String?
+  phone           String?
+  email           String?
+  website         String?
+  address         String?
+  intent          String    @default("LOW")
+  status          String    @default("NEW")
+  outreachStatus  String    @default("PENDING")
+  outreachMessage String?
+  lastContactedAt DateTime?
+  followUpCount   Int       @default(0)
+  currentStep     Int       @default(1)
+  searchNiche     String?
+  searchLocation  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  campaignId      String?
+  replyContent    String?
+  replySentiment  String?
+  campaign        Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Campaign {
+  id                String         @id @default(uuid())
+  userId            String
+  name              String
+  description       String?
+  scoreThreshold    Int            @default(70)
+  maxDailySends     Int            @default(50)
+  followUpDelayDays Int            @default(2)
+  status            String         @default("ACTIVE")
+  createdAt         DateTime       @default(now())
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steps             CampaignStep[]
+  leads             Lead[]
+}
+
+model CampaignStep {
+  id           String   @id @default(uuid())
+  campaignId   String
+  step         Int
+  dayDelay     Int
+  templateName String?
+  subject      String
+  body         String
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}

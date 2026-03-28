@@ -1,0 +1,88 @@
+{
+  "http://www.zettatechnologies.com": {
+    "aiohttp": {
+      "status": 200,
+      "emails": [],
+      "len": 45503
+    },
+    "playwright": {
+      "emails": [],
+      "len": 83646
+    }
+  },
+  "https://www.knewtontech.com": {
+    "aiohttp": {
+      "status": 200,
+      "emails": [
+        "3d3@2x.png",
+        "info@knewtontech.com",
+        "3d11@2x.png",
+        "3d5@2x.png",
+        "sales@knewtontech.com",
+        "3d8@2x.png"
+      ],
+      "len": 76369
+    },
+    "playwright": {
+      "emails": [
+        "3d3@2x.png",
+        "info@knewtontech.com",
+        "3d11@2x.png",
+        "3d5@2x.png",
+        "sales@knewtontech.com",
+        "3d8@2x.png"
+      ],
+      "len": 77903
+    }
+  },
+  "https://stechdigitalsolutions.com": {
+    "aiohttp": {
+      "status": 200,
+      "emails": [
+        "mail@stechdigtialsolutions.com",
+        "mail@stechdigitalsolutions.com",
+        "stech.sureshk@gmail.com"
+      ],
+      "len": 194871
+    },
+    "playwright": {
+      "emails": [
+        "mail@stechdigtialsolutions.com",
+        "mail@stechdigitalsolutions.com",
+        "stech.sureshk@gmail.com"
+      ],
+      "len": 187632
+    }
+  },
+  "http://www.vindhya-infomedia.com": {
+    "aiohttp": {
+      "error": "Cannot connect to host www.vindhya-infomedia.com:80 ssl:False [getaddrinfo failed]"
+    },
+    "playwright": {
+      "error": "Page.goto: net::ERR_NAME_NOT_RESOLVED at http://www.vindhya-infomedia.com/\nCall log:\n  - navigating to \"http://www.vindhya-infomedia.com/\", waiting until \"load\"\n"
+    }
+  },
+  "http://www.wefixtechnologies.com": {
+    "aiohttp": {
+      "status": 200,
+      "emails": [],
+      "len": 114
+    },
+    "playwright": {
+      "error": "Page.content: Unable to retrieve content because the page is navigating and changing the content."
+    }
+  },
+  "https://gpsoftwaresolutions.com": {
+    "aiohttp": {
+      "status": 200,
+      "emails": [
+        "info@gpsoftwaresolutions.com",
+        "themeht23@gmail.com"
+      ],
+      "len": 97889
+    },
+    "playwright": {
+      "error": "Page.goto: Timeout 30000ms exceeded.\nCall log:\n  - navigating to \"https://gpsoftwaresolutions.com/\", waiting until \"load\"\n"
+    }
+  }
+}

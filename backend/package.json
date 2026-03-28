@@ -1,0 +1,38 @@
+{
+  "name": "autosdr-backend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "predev": "node -e \"const {execSync}=require('child_process'); try { if(process.platform==='win32') execSync('FOR /F \\\"tokens=5\\\" %a IN (\\'netstat -ano ^| findstr :6001\\') DO taskkill /F /PID %a', {stdio:'ignore'}); else execSync('lsof -ti:6001 | xargs kill -9', {stdio:'ignore'}); } catch(e){}\"",
+    "dev": "nodemon --watch server --ext ts,js --exec tsx server/index.ts",
+    "start": "tsx server/index.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^1.40.0",
+    "@prisma/client": "^6.4.1",
+    "bcryptjs": "^3.0.3",
+    "cheerio": "^1.2.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "imapflow": "^1.2.13",
+    "jsonwebtoken": "^9.0.3",
+    "mailparser": "^3.9.4",
+    "nodemailer": "^8.0.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/mailparser": "^3.4.6",
+    "@types/node": "^22.14.0",
+    "@types/nodemailer": "^7.0.11",
+    "nodemon": "^3.1.14",
+    "prisma": "^6.4.1",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2"
+  }
+}

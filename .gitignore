@@ -1,0 +1,39 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Node stuff
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.*
+backend/.env
+frontend/.env
+package-lock.json
+
+# Editor stuff
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Prisma generated stuff
+/src/generated/prisma
+/backend/prisma/generated
+/frontend/src/generated
+/frontend/dist
+/backend/server/python/dist
+/backend/server/python/build
+/backend/server/python/*.spec
