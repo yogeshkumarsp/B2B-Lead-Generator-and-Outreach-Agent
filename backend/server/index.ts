@@ -71,7 +71,7 @@ app.get('/api/health', (_req, res) => {
 app.use(express.static(frontendDistPath));
 
 // Catch-all route for SPA
-app.get('/*', (req, res) => {
+app.get('*path', (req, res) => {
     if (req.path.startsWith('/api')) {
         return res.status(404).json({ error: 'API route not found' });
     }
