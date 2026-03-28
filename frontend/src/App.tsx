@@ -27,8 +27,15 @@ const App: React.FC = () => {
   );
 
   const getInitialTab = () => {
+    const user = authService.getCurrentUser();
     const path = window.location.pathname.replace('/', '') || 'dashboard';
-    return urlToTab[path] || 'dashboard';
+    const tab = urlToTab[path] || 'dashboard';
+    
+    // Redirect non-admins away from admin tab
+    if (tab === 'admin' && user?.role !== 'ADMIN') {
+      return 'dashboard';
+    }
+    return tab;
   };
 
   const [activeTab, setActiveTab] = useState(getInitialTab());

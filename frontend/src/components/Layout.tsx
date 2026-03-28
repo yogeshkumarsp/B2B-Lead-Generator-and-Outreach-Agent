@@ -61,20 +61,24 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, agent
             );
           })}
 
-          {/* Admin nav item — always visible */}
-          <div className="pt-3 pb-1 px-3">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Admin</div>
-          </div>
-          <button
-            onClick={() => onTabChange('admin')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${activeTab === 'admin'
-                ? 'bg-blue-50/80 text-blue-700'
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-          >
-            <ShieldCheck className="w-4 h-4" />
-            Access Requests
-          </button>
+          {/* Admin nav item — visible only to admins */}
+          {user?.role === 'ADMIN' && (
+            <>
+              <div className="pt-3 pb-1 px-3">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Admin</div>
+              </div>
+              <button
+                onClick={() => onTabChange('admin')}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${activeTab === 'admin'
+                    ? 'bg-blue-50/80 text-blue-700'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+              >
+                <ShieldCheck className="w-4 h-4" />
+                Access Requests
+              </button>
+            </>
+          )}
         </nav>
 
         {/* Bottom */}
