@@ -13,9 +13,24 @@ import { agent } from './services/agent';
 import { authService } from './services/auth';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const getInitialTab = () => {
+    const path = window.location.pathname.replace('/', '') || 'dashboard';
+    const validTabs = ['dashboard', 'leads', 'campaigns', 'logs', 'settings', 'admin'];
+    return validTabs.includes(path) ? path : 'dashboard';
+  };
+
+  const [activeTab, setActiveTab] = useState(getInitialTab());
   const [isAuthenticated, setIsAuthenticated] = useState(authService.isAuthenticated());
   const [agentEnabled, setAgentEnabled] = useState(store.getSettings().isAgentEnabled);
+
+  // Sync URL with activeTab
+  useEffect(() => {
+    const currentPath = window.location.pathname.replace('/', '') || 'dashboard';
+    if (activeTab !== currentPath) {
+      const newPath = activeTab === 'dashboard' ? '/' : `/${activeTab}`;
+      window.history.pushState({ tab: activeTab }, '', newPath);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -46,10 +61,21 @@ const App: React.FC = () => {
     };
     window.addEventListener('app-navigate', handleNav as EventListener);
 
+    const handlePopState = (e: PopStateEvent) => {
+      if (e.state && e.state.tab) {
+        setActiveTab(e.state.tab);
+      } else {
+        const path = window.location.pathname.replace('/', '') || 'dashboard';
+        setActiveTab(path);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('app-navigate', handleNav as EventListener);
+      window.removeEventListener('popstate', handlePopState);
     };
   }, [agentEnabled]);
 
