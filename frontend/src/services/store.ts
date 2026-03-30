@@ -42,6 +42,11 @@ class Store {
   getLeads() { return [...this.leads]; }
   getQualifiedLeads() { return this.leads.filter(l => l.status === LeadStatus.QUALIFIED); }
 
+  setLeads(leads: Lead[]) {
+    this.leads = [...leads];
+    this.save();
+  }
+
   addLeads(newLeads: Partial<Lead>[], source: string) {
     const existingNames = new Set(this.leads.map(l => l.name.toLowerCase().trim()));
 
@@ -61,15 +66,16 @@ class Store {
     if (uniqueNewLeads.length === 0) return [];
 
     const processed: Lead[] = uniqueNewLeads.map(l => {
-      const score = l.score || 0;
       const hasEmail = l.email && l.email.includes('@');
-      const status = (score >= 70 && hasEmail) ? LeadStatus.QUALIFIED : LeadStatus.HOLD;
+      const hasPhone = !!l.phone;
+      const intent = (hasEmail && hasPhone) ? 'HIGH' : 'LOW';
+      const status = hasEmail ? LeadStatus.QUALIFIED : LeadStatus.UNQUALIFIED;
 
       return {
         ...l,
         id: Math.random().toString(36).substr(2, 9),
         source,
-        score,
+        intent,
         status,
         outreachStatus: OutreachStatus.PENDING,
         followUpCount: 0,
@@ -93,6 +99,11 @@ class Store {
 
   // Campaigns
   getCampaigns() { return [...this.campaigns]; }
+
+  setCampaigns(campaigns: Campaign[]) {
+    this.campaigns = [...campaigns];
+    this.save();
+  }
 
   addCampaign(campaign: Omit<Campaign, 'id' | 'createdAt'>) {
     const newCampaign: Campaign = {

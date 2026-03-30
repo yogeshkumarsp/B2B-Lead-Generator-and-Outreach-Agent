@@ -8,7 +8,7 @@ import { agent } from '../services/agent';
 import { Zap, Plus, Download, Users, Trash2, Loader2, Circle, Pause, Mail, MessageSquare, ExternalLink, Eye } from 'lucide-react';
 
 const Campaigns: React.FC = () => {
-  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>(store.getCampaigns());
   const [selectedCampaign, setSelectedCampaign] = useState<any | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [campaignLeads, setCampaignLeads] = useState<Lead[]>([]);
@@ -83,6 +83,7 @@ const Campaigns: React.FC = () => {
       const cRes = await apiFetch('/api/campaigns');
       const cData = await cRes.json();
       setCampaigns(cData);
+      store.setCampaigns(cData);
       
       // If a campaign is currently selected, refresh its leads too
       if (selectedCampaign) {

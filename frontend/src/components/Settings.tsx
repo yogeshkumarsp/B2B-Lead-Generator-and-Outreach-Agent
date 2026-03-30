@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../services/apiFetch';
+import { store } from '../services/store';
 import { Card, Input, Button } from './Common';
 import { Save, Check, Loader2 } from 'lucide-react';
 
@@ -24,8 +25,16 @@ const defaultSettings: SettingsData = {
 };
 
 const Settings: React.FC = () => {
-  const [settings, setSettings] = useState<SettingsData>(defaultSettings);
-  const [isLoading, setIsLoading] = useState(true);
+  const [settings, setSettings] = useState<SettingsData>({
+    senderName: store.getSettings().senderName || defaultSettings.senderName,
+    senderEmail: store.getSettings().senderEmail || defaultSettings.senderEmail,
+    agentPersona: store.getSettings().agentPersona,
+    dailySendLimit: store.getSettings().dailySendLimit,
+    hourlyThrottleLimit: store.getSettings().hourlyThrottleLimit,
+    replyDetectionIntervalMinutes: store.getSettings().replyDetectionIntervalMinutes,
+    isAgentEnabled: store.getSettings().isAgentEnabled,
+  });
+  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -35,7 +44,7 @@ const Settings: React.FC = () => {
         const res = await apiFetch('/api/settings');
         if (res.ok) {
           const data = await res.json();
-          setSettings({
+          const mapped = {
             senderName: data.senderName || defaultSettings.senderName,
             senderEmail: data.senderEmail || defaultSettings.senderEmail,
             agentPersona: data.agentPersona,
@@ -43,7 +52,9 @@ const Settings: React.FC = () => {
             hourlyThrottleLimit: data.hourlyThrottleLimit,
             replyDetectionIntervalMinutes: data.replyDetectionIntervalMinutes,
             isAgentEnabled: data.isAgentEnabled,
-          });
+          };
+          setSettings(mapped);
+          store.updateSettings(mapped);
         }
       } catch (err) {
         console.error('Failed to fetch settings:', err);

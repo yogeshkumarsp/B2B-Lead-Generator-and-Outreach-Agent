@@ -9,9 +9,9 @@ import { agent } from '../services/agent';
 import { Download, Trash2, Search, Loader2, Layers } from 'lucide-react';
 
 const Leads: React.FC = () => {
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [leads, setLeads] = useState<Lead[]>(store.getLeads());
   const [isDiscovering, setIsDiscovering] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(store.getLeads().length === 0);
   const [isError, setIsError] = useState(false);
   const [niche, setNiche] = useState('');
   const [location, setLocation] = useState('');
@@ -19,7 +19,7 @@ const Leads: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [campaignIdToAssign, setCampaignIdToAssign] = useState<string>('');
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set(JSON.parse(localStorage.getItem('dismissedLeadIds') || '[]')));
-  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>(store.getCampaigns());
 
   const loadLeads = () => {
     setIsLoading(true);
@@ -43,6 +43,7 @@ const Leads: React.FC = () => {
           }));
 
           setLeads(mapped);
+          store.setLeads(mapped);
         } else {
           setIsError(true);
         }
@@ -50,7 +51,10 @@ const Leads: React.FC = () => {
       .then(() => apiFetch('/api/campaigns'))
       .then(res => res.json())
       .then(cData => {
-        if (Array.isArray(cData)) setCampaigns(cData);
+        if (Array.isArray(cData)) {
+          setCampaigns(cData);
+          store.setCampaigns(cData);
+        }
       })
       .catch(err => {
         console.error("Failed to load leads from DB:", err);
