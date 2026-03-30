@@ -1,6 +1,6 @@
-import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import * as cheerio from 'cheerio';
 import { GoogleGenAI } from '@google/genai';
+import { ApifyClient } from 'apify-client';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -222,7 +222,6 @@ async function extractWithAI(html: string, businessName: string, websiteUrl: str
 // ─── Email Scraping ───────────────────────────────────────────────────────────
 
 async function scrapeEmail(
-    context: BrowserContext,
     websiteUrl: string,
     businessName: string,
     keyword: string
@@ -249,20 +248,8 @@ async function scrapeEmail(
 
             let emailSet = extractEmailsFromHtml(html);
 
-            // SPA fallback
-            if (!emailSet.size) {
-                const isSpa = ['id="root"', 'id="app"', 'index-', '/assets/'].some(t => html.toLowerCase().includes(t));
-                if (isSpa || html.length < 3500) {
-                    console.log(`[Email] SPA detected for ${businessName}, using Playwright fallback...`);
-                    try {
-                        const page = await context.newPage();
-                        await page.goto(websiteUrl, { timeout: 15000, waitUntil: 'networkidle' });
-                        const rendered = await page.content();
-                        await page.close();
-                        emailSet = extractEmailsFromHtml(rendered);
-                    } catch { }
-                }
-            }
+            // SPA fallback has been removed to save server resources.
+            // Heavily relies on regex over fast fetch or Google AI.
 
             if (emailSet.size) {
                 const email = [...emailSet][0];
@@ -309,386 +296,99 @@ async function scrapeEmail(
     return null;
 }
 
-// ─── Maps Listing Scraping ────────────────────────────────────────────────────
-
-async function scrapeListing(
-    context: BrowserContext,
-    url: string,
-    centerLat: number | null,
-    centerLng: number | null,
-    radiusLimit: number,
-    searchLocation: string,
-    keyword: string
-): Promise<BusinessResult | null> {
-    let page: Page | null = null;
-    try {
-        page = await context.newPage();
-        await page.route('**/*', route => {
-            if (['image', 'font', 'media', 'other'].includes(route.request().resourceType())) {
-                route.abort();
-            } else {
-                route.continue();
-            }
-        });
-
-        const gotoStart = Date.now();
-        await page.goto(url, { timeout: 25000, waitUntil: 'domcontentloaded' });
-        
-        // Distance check
-        if (centerLat !== null && centerLng !== null) {
-            const currentUrl = page.url();
-            const coordMatch = currentUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) ||
-                currentUrl.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
-            if (coordMatch) {
-                const bLat = parseFloat(coordMatch[1]);
-                const bLng = parseFloat(coordMatch[2]);
-                let dist = haversineDistance(centerLat, centerLng, bLat, bLng);
-                if (dist > radiusLimit) {
-                    await sleep(1000);
-                    const match2 = page.url().match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-                    if (match2) dist = haversineDistance(centerLat, centerLng, parseFloat(match2[1]), parseFloat(match2[2]));
-                }
-                if (dist > radiusLimit) {
-                    console.log(`[Maps] Discarding result out of ${radiusLimit}km range: ${dist.toFixed(1)}km away`);
-                    await page.close();
-                    return null;
-                }
-            }
-        }
-
-        try { 
-            await page.locator('h1').first().waitFor({ state: 'attached', timeout: 15000 }); 
-        } catch (err: any) { 
-            console.log(`[Maps] ⚠️ waitForSelector('h1') failed after ${Date.now() - gotoStart}ms: ${err.message}`);
-            await page.close(); 
-            return null; 
-        }
-
-        const rawName = await page.locator('h1').first().textContent() || '';
-        const name = cleanBusinessName(rawName);
-
-        // Filter educational institutions
-        if (keyword) {
-            const kwLower = keyword.toLowerCase();
-            const nameLower = rawName.toLowerCase();
-            const eduTerms = ['college', 'university', 'institute', 'school', 'academy', 'education', 'training', 'course', 'classes', 'tuition'];
-            const isEduSearch = eduTerms.some(t => kwLower.includes(t));
-            const isEduBiz = eduTerms.some(t => nameLower.includes(t));
-            if (!isEduSearch && isEduBiz) {
-                console.log(`[Maps] Discarding educational institution: ${rawName}`);
-                await page.close(); return null;
-            }
-
-            // Filter B2C retail for B2B searches
-            const retailTerms = ['reliance digital', 'croma', 'poorvika', 'sangeetha', 'supermarket', 'grocery', 'furniture', 'clothing', 'cctv', 'security system', 'appliances', 'mobile store', 'repair shop'];
-            const b2bTerms = ['agency', 'agencies', 'software', 'marketing', 'b2b', 'it company', 'technology', 'consulting'];
-            const isB2bSearch = b2bTerms.some(t => kwLower.includes(t));
-            const isRetailBiz = retailTerms.some(t => nameLower.includes(t));
-            if (isB2bSearch && isRetailBiz) {
-                console.log(`[Maps] Discarding B2C retail for B2B search: ${rawName}`);
-                await page.close(); return null;
-            }
-        }
-
-        // Phone
-        let phone: string | null = null;
-        try {
-            const phoneBtn = page.locator('button[data-item-id*="phone:"]');
-            if (await phoneBtn.count() > 0) {
-                const aria = await phoneBtn.first().getAttribute('aria-label');
-                if (aria) {
-                    const digits = aria.replace('Phone:', '').replace(/\D/g, '').replace(/^0+/, '');
-                    if (digits.length >= 10) phone = digits.slice(-10);
-                }
-            }
-        } catch { }
-
-        // Website
-        let website: string | null = null;
-        try {
-            const webBtn = page.locator('a[data-item-id="authority"]');
-            if (await webBtn.count() > 0) website = await webBtn.first().getAttribute('href');
-        } catch { }
-
-        // Address
-        let address = 'Address not found';
-        try {
-            const addrBtn = page.locator('button[data-item-id="address"]');
-            if (await addrBtn.count() > 0) {
-                const aria = await addrBtn.first().getAttribute('aria-label');
-                if (aria) address = aria.replace('Address:', '').trim();
-            }
-        } catch { }
-
-        // City mismatch check
-        if (searchLocation && address !== 'Address not found') {
-            const majorCities = ['Chennai', 'Bangalore', 'Bengaluru', 'Mumbai', 'Delhi', 'Hyderabad'];
-            for (const city of majorCities) {
-                const cityRe = new RegExp(`\\b${city}\\b(?!\\s+(?:Rd|Road|Street|Cross|Nagar))`, 'i');
-                if (cityRe.test(address) && !searchLocation.toLowerCase().includes(city.toLowerCase())) {
-                    const parts = address.toLowerCase().split(',');
-                    if (parts[parts.length - 1].includes(city.toLowerCase())) {
-                        console.log(`[Maps] Discarding result from different city: ${address}`);
-                        await page.close(); return null;
-                    }
-                }
-            }
-        }
-
-        // Types
-        const types: string[] = [];
-        try {
-            const typeEl = page.locator('button[class*="DByne"]').first();
-            if (await typeEl.count() > 0) {
-                const t = await typeEl.innerText();
-                if (t) types.push(t);
-            }
-        } catch { }
-
-        await page.close();
-        return {
-            name,
-            address,
-            phone: phone || undefined,
-            website: website || undefined,
-            email: null,
-            place_id: 'scraped_' + name.replace(/\s/g, '_'),
-            types
-        };
-    } catch (e: any) {
-        console.error(`[Maps] ❌ Fatal error in scrapeListing: ${e.message}`);
-        try { if (page) await page.close(); } catch { }
-        return null;
-    }
-}
-
-// ─── Main Entry Point ─────────────────────────────────────────────────────────
+// ─── Main Entry Point (Apify Integration) ─────────────────────────────────────
 
 export async function searchBusinesses(keyword: string, location: string, radius = '60'): Promise<BusinessResult[]> {
-    const startTime = Date.now();
-    const GLOBAL_TIMEOUT_MS = 300000; // 5 minutes to allow slow Free-Tier Render CPUs to sequentially process tabs without crashing
-    let timeLimitReached = false;
-    
-    const globalTimer = setTimeout(() => {
-        timeLimitReached = true;
-        console.log('[Maps] === 5 MINUTE GLOBAL TIME LIMIT REACHED ===');
-    }, GLOBAL_TIMEOUT_MS);
+    const APIFY_TOKEN = process.env.APIFY_API_TOKEN;
+    if (!APIFY_TOKEN) {
+        console.error('[Maps] ❌ APIFY_API_TOKEN is missing in environment variables.');
+        return [];
+    }
 
-    const radiusKm = parseFloat(radius) || 60;
-    let browser: Browser | null = null;
+    const client = new ApifyClient({ token: APIFY_TOKEN });
+    const searchString = `${keyword} in ${location}`;
+    console.log(`[Apify] Starting Google Maps extraction for: "${searchString}"`);
+
     let results: BusinessResult[] = [];
-
+    
     try {
-        browser = await chromium.launch({
-            headless: true,
-            args: [
-                '--disable-blink-features=AutomationControlled',
-                '--disable-dev-shm-usage',
-                '--no-sandbox',
-                '--disable-gpu',
-                '--disable-software-rasterizer',
-                '--disable-extensions'
-            ]
+        // Run the Google Maps Extractor actor
+        const run = await client.actor("compass/crawler-google-places").call({
+            searchStringsArray: [searchString],
+            maxCrawledPlacesPerSearch: 20, // get a few extra over the target to ensure we find ones with websites
+            language: "en",
         });
 
-        const context = await browser.newContext();
-        const page = await context.newPage();
+        console.log(`[Apify] Run ${run.id} finished. Fetching results...`);
+        const { items } = await client.dataset(run.defaultDatasetId).listItems();
 
-        // 1. Geocode
-        console.log(`[Maps] Geocoding location: ${location}`);
-        await page.goto(`https://www.google.com/maps/search/${encodeURIComponent(location)}`, { timeout: 45000, waitUntil: 'domcontentloaded' }).catch(() => {});
-
-        try {
-            const acceptBtn = page.locator('button[aria-label="Accept all"]');
-            if (await acceptBtn.isVisible({ timeout: 2000 })) await acceptBtn.click();
-        } catch { }
-
-        try { await page.waitForURL('**/@*', { timeout: 8000 }); } catch { }
-
-        const coordMatch = page.url().match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-        let centerLat: number | null = null, centerLng: number | null = null;
-        let searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(keyword + ' in ' + location)}`;
-
-        if (coordMatch) {
-            centerLat = parseFloat(coordMatch[1]);
-            centerLng = parseFloat(coordMatch[2]);
-            const zoom = radiusKm < 50 ? '10z' : '9z';
-            searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(keyword + ' ' + location)}/@${coordMatch[1]},${coordMatch[2]},${zoom}`;
+        if (!items || items.length === 0) {
+            console.log(`[Apify] No listings found for "${searchString}".`);
+            return results;
         }
 
-        if (timeLimitReached) throw new Error('Timeout reached during geocoding');
+        console.log(`[Apify] Found ${items.length} candidate businesses. Starting local email extraction...`);
 
-        console.log(`[Maps] Search URL: ${searchUrl}`);
-        await page.goto(searchUrl, { timeout: 45000, waitUntil: 'domcontentloaded' }).catch(() => {});
-
-        try { await page.waitForSelector('div[role="feed"]', { timeout: 5000 }); }
-        catch { try { await page.waitForSelector('a[href*="/maps/place/"]', { timeout: 5000 }); } catch { } }
-
-        // Scroll to load more results
-        try {
-        const feed = page.locator('div[role="feed"]').first();
-            if (await feed.count() > 0) {
-                for (let i = 0; i < 4; i++) {
-                    if (timeLimitReached) break;
-                    await feed.evaluate(n => { (n as HTMLElement).scrollTop = (n as HTMLElement).scrollHeight; });
-                    await sleep(200);
-                }
-            }
-        } catch { }
-
-        // 2. Collect listing URLs
-        const linksToVisit: string[] = [];
-        if (page.url().includes('/maps/place/')) {
-            linksToVisit.push(page.url());
-        } else {
-            const listings = await page.locator('a[href*="/maps/place/"]').all();
-            for (const listing of listings) {
-                if (timeLimitReached) break;
-                const href = await listing.getAttribute('href');
-                if (!href) continue;
-
-                if (centerLat !== null && centerLng !== null) {
-                    const m = href.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || href.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
-                    if (m && haversineDistance(centerLat, centerLng, parseFloat(m[1]), parseFloat(m[2])) > radiusKm) continue;
-                }
-
-                linksToVisit.push(href);
-                if (linksToVisit.length >= MAX_LINKS) break;
-            }
-        }
-
-        console.log(`[Maps] Found ${linksToVisit.length} candidate listings. Starting sequential extraction on single page...`);
-
-        // 3. Sequential extraction using the SAME page to save massive CPU overhead on Render
         let validCount = 0;
         let processedCount = 0;
 
-        for (let i = 0; i < linksToVisit.length; i++) {
-            if (validCount >= TARGET_VALID_LEADS || timeLimitReached) break;
-            
-            const taskNum = i + 1;
-            const url = linksToVisit[i];
-            console.log(`[Maps] [Task ${taskNum}/${linksToVisit.length}] Visiting: ${url}`);
+        for (const item of items as any[]) {
+            if (validCount >= TARGET_VALID_LEADS) break;
             
             processedCount++;
+            const name = cleanBusinessName(item.title || '');
+            if (!name) continue;
+
+            const address = item.address || 'Address not found';
+            let phone = item.phone || item.phoneUnformatted || undefined;
+            if (phone) phone = phone.replace(/\D/g, '').slice(-10);
             
-            try {
-                // Navigate in the existing page
-                await Promise.race([
-                    page.goto(url, { timeout: 25000, waitUntil: 'domcontentloaded' }).catch(() => {}),
-                    new Promise(resolve => setTimeout(resolve, 25000))
-                ]);
-                
-                try {
-                    await page.locator('h1').first().waitFor({ state: 'attached', timeout: 10000 });
-                } catch (err) {
-                    console.log(`[Maps] [Task ${taskNum}] Title not found or timed out. Skipping.`);
+            const website = item.website || undefined;
+            const types = item.categories || [];
+            
+            const biz: BusinessResult = {
+                name,
+                address,
+                phone,
+                website,
+                email: null,
+                place_id: 'scraped_' + name.replace(/\s/g, '_'),
+                types
+            };
+
+            console.log(`[Apify] [Task ${processedCount}] Checking emails for: ${biz.name} (${biz.website || 'No website'})`);
+
+            if (biz.website) {
+                const emailRes = await Promise.race([
+                    scrapeEmail(biz.website, biz.name, keyword),
+                    new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Email timeout')), 15000))
+                ]).catch(err => {
+                    console.log(`[Apify] Email scraping error: ${err.message}`);
+                    return null;
+                });
+
+                if (emailRes === 'REJECT_EXPIRED' || emailRes === 'REJECT_UNWANTED') {
+                    console.log(`[Apify] Discarding ${biz.name}: ${emailRes}`);
                     continue;
                 }
+                biz.email = emailRes;
+            }
 
-                const rawName = await page.locator('h1').first().textContent() || '';
-                const name = cleanBusinessName(rawName);
-
-                // Phone
-                let phone: string | null = null;
-                try {
-                    const phoneBtn = page.locator('button[data-item-id*="phone:"]');
-                    if (await phoneBtn.count() > 0) {
-                        const aria = await phoneBtn.first().getAttribute('aria-label');
-                        if (aria) phone = aria.replace('Phone:', '').replace(/\D/g, '').slice(-10);
-                    }
-                } catch { }
-
-                // Website
-                let website: string | null = null;
-                try {
-                    const webBtn = page.locator('a[data-item-id="authority"]');
-                    if (await webBtn.count() > 0) website = await webBtn.first().getAttribute('href');
-                } catch { }
-
-                // Address
-                let address = 'Address not found';
-                try {
-                    const addrBtn = page.locator('button[data-item-id="address"]');
-                    if (await addrBtn.count() > 0) {
-                        const aria = await addrBtn.first().getAttribute('aria-label');
-                        if (aria) address = aria.replace('Address:', '').trim();
-                    }
-                } catch { }
-
-                const biz: BusinessResult = {
-                    name,
-                    address,
-                    phone: phone || undefined,
-                    website: website || undefined,
-                    email: null,
-                    place_id: 'scraped_' + name.replace(/\s/g, '_'),
-                    types: []
-                };
-
-                console.log(`[Maps] [Task ${taskNum}] Extracted business: ${biz.name}. Checking for website/email...`);
-
-                if (biz.website) {
-                    const emailRes = await Promise.race([
-                        scrapeEmail(context, biz.website, biz.name, keyword),
-                        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Email timeout')), 15000))
-                    ]).catch(err => {
-                        console.log(`[Maps] [Task ${taskNum}] Email scraping error: ${err.message}`);
-                        return null;
-                    });
-
-                    if (emailRes === 'REJECT_EXPIRED' || emailRes === 'REJECT_UNWANTED') {
-                        console.log(`[Maps] [Task ${taskNum}] Discarding ${biz.name}: ${emailRes}`);
-                        continue;
-                    }
-                    biz.email = emailRes;
-                }
-
-                if (biz.email && !timeLimitReached) {
-                    results.push(biz);
-                    validCount++;
-                    console.log(`[Maps] [Task ${taskNum}] SUCCESS! Found email for ${biz.name}. Total found: ${validCount}/${TARGET_VALID_LEADS}`);
-                    if (validCount >= TARGET_VALID_LEADS) {
-                        console.log(`[Maps] Reached ${TARGET_VALID_LEADS} valid leads. Done.`);
-                        break;
-                    }
-                } else if (!biz.email) {
-                    console.log(`[Maps] [Task ${taskNum}] No email found for ${biz.name}. Skipping.`);
-                }
-            } catch (err: any) {
-                console.error(`[Maps] [Task ${taskNum}] Fatal error: ${err.message}`);
+            if (biz.email) {
+                results.push(biz);
+                validCount++;
+                console.log(`[Apify] SUCCESS! Found email for ${biz.name}. Total found: ${validCount}/${TARGET_VALID_LEADS}`);
+            } else {
+                console.log(`[Apify] No email found for ${biz.name}. Skipping.`);
             }
         }
 
-        console.log(`[Maps] All tasks finished or timed out. Total processed: ${processedCount}. Returning ${results.length} valid leads.`);
+        console.log(`[Apify] Extraction complete. Returning ${results.length} valid leads.`);
+        
         return results;
 
-    } catch (e) {
-        console.error('[Maps] Fatal scraper error:', e);
+    } catch (e: any) {
+        console.error(`[Apify] Fatal error calling Apify API:`, e.response?.data || e.message);
         return results;
-    } finally {
-        clearTimeout(globalTimer);
-        if (browser) await browser.close().catch(() => { });
-    }
-}
-
-// ─── Semaphore for Concurrency Control ────────────────────────────────────────
-
-class Semaphore {
-    private queue: Array<() => void> = [];
-    private active = 0;
-    constructor(private readonly limit: number) { }
-
-    run<T>(fn: () => Promise<T>): Promise<T> {
-        return new Promise((resolve, reject) => {
-            this.queue.push(() => {
-                this.active++;
-                fn().then(resolve, reject).finally(() => {
-                    this.active--;
-                    if (this.queue.length > 0) this.queue.shift()!();
-                });
-            });
-            if (this.active < this.limit) this.queue.shift()!();
-        });
     }
 }
