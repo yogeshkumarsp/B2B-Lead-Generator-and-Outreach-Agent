@@ -156,6 +156,23 @@ router.post('/discover', async (req: AuthRequest, res) => {
                 
                 // 3. AI Filter
                 businesses = await filterBusinessesByNiche(businesses, niche);
+                
+                // 4. Find Matching Campaign to Auto-Assign
+                const matchingCampaign = await prisma.campaign.findFirst({
+                    where: {
+                        userId,
+                        status: 'ACTIVE',
+                        OR: [
+                            { name: { contains: niche, mode: 'insensitive' } },
+                            { description: { contains: niche, mode: 'insensitive' } }
+                        ]
+                    },
+                    orderBy: { createdAt: 'desc' }
+                });
+
+                if (matchingCampaign) {
+                    console.log(`[Discovery] Found matching campaign: ${matchingCampaign.name}. Auto-assigning.`);
+                }
 
                 const normalizeName = (name: string) => {
                     return name.toLowerCase()
@@ -211,12 +228,20 @@ router.post('/discover', async (req: AuthRequest, res) => {
                                 address: business.address || location,
                                 intent,
                                 status,
+                                campaignId: matchingCampaign?.id, // Zero-Click Auto-Assign!
                                 searchNiche: nicheKey,
                                 searchLocation: locationKey
                             }
                         });
                         finalResultsMap.set(uniqueKey, created);
                     } else {
+                        // Even for existing leads, if they aren't assigned, assign them now
+                        if (!existing.campaignId && matchingCampaign) {
+                            existing = await prisma.lead.update({
+                                where: { id: existing.id },
+                                data: { campaignId: matchingCampaign.id }
+                            });
+                        }
                         finalResultsMap.set(uniqueKey, existing);
                     }
                 }));
