@@ -144,16 +144,8 @@ export class BackendAutoSDRAgent {
             where: { userId }
         });
 
-        const mappedLeads: any[] = allLeads.map(l => ({
-            name: l.companyName,
-            company: l.companyName,
-            location: l.address,
-            searchLocation: l.searchLocation,
-            searchNiche: l.searchNiche
-        }));
-
-        // Removed: ProcessUnscoredLeads (Lead scoring is now binary based on contact info completeness)
-        await this.runCampaignOutreach(userId, mappedLeads, campaigns, settings);
+        // Leads are passed in full to maintain IDs, Emails, and Campaign assignments
+        await this.runCampaignOutreach(userId, allLeads, campaigns, settings);
     }
 
     private async runCampaignOutreach(userId: string, leads: any[], campaigns: any[], settings: any) {
@@ -280,8 +272,12 @@ export class BackendAutoSDRAgent {
     private canSendOutreach(lead: any, campaign: any): boolean {
         if (lead.outreachStatus === 'REPLIED' || lead.outreachStatus === 'STOPPED') return false;
 
-        // Only send outreach to QUALIFIED leads (must have valid contact info)
-        if (lead.status !== 'QUALIFIED') return false;
+        // Send outreach if they have an email (this is more resilient than just status check)
+        const hasEmail = lead.email && lead.email.includes('@');
+        if (!hasEmail) return false;
+
+        // Still block if manually REJECTED
+        if (lead.status === 'REJECTED') return false;
 
         if (lead.outreachStatus === 'PENDING' || !lead.lastContactedAt) return true;
 
