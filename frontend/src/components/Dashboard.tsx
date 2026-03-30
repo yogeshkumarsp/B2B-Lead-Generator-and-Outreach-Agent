@@ -312,7 +312,10 @@ const Dashboard: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-right flex flex-col items-end gap-1.5">
-                    <Badge variant={l.outreachStatus === OutreachStatus.SENT ? 'info' : 'gray'}>
+                    <Badge variant={
+                      l.outreachStatus === OutreachStatus.SENT ? 'info' : 
+                      l.outreachStatus === OutreachStatus.PENDING ? 'warning' : 'gray'
+                    }>
                       {l.outreachStatus}
                     </Badge>
                   </div>
@@ -459,7 +462,11 @@ const Dashboard: React.FC = () => {
                               <a href={`mailto:${lead.email}`} className="text-blue-600 hover:underline truncate max-w-[150px] inline-block">{lead.email}</a>
                             </td>
                             <td className="px-6 py-3 text-center">
-                              <Badge variant={lead.status === LeadStatus.QUALIFIED ? 'success' : lead.status === LeadStatus.REJECTED ? 'danger' : lead.status === LeadStatus.HOLD ? 'warning' : 'gray'}>
+                              <Badge variant={
+                                lead.status === LeadStatus.QUALIFIED ? 'success' : 
+                                lead.status === LeadStatus.REJECTED ? 'danger' : 
+                                lead.status === LeadStatus.HOLD ? 'warning' : 'gray'
+                              }>
                                 {lead.status}
                               </Badge>
                             </td>
