@@ -109,9 +109,10 @@ export async function searchBusinesses(keyword: string, location: string, radius
         // 2. Chained Execution: Contact Info Scraper
         const contactRun = await client.actor("vdrmota/contact-info-scraper").call({
             startUrls,
-            maxDepth: 1, // Look at the start page and immediate subpages
-            maxRequestsPerStartUrl: 3, // fast limit
-            sameDomain: true,
+            maxCrawlDepth: 1, // Look at the start page and immediate subpages
+            maxCrawlPages: 120, // max global pages (40 urls * 3 pages)
+            stayWithinDomain: true,
+            extractFromText: true,
             proxySettings: { useApifyProxy: true }
         });
 
