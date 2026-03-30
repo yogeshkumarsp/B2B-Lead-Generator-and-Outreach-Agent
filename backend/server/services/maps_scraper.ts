@@ -540,36 +540,67 @@ export async function searchBusinesses(keyword: string, location: string, radius
         console.log(`[Maps] Found ${linksToVisit.length} candidate listings. Starting extraction...`);
 
         // 3. Concurrent extraction
+        console.log(`[Maps] Starting concurrent extraction for ${linksToVisit.length} listings...`);
         const results: BusinessResult[] = [];
         let validCount = 0;
+        let processedCount = 0;
 
-        const sem = new Semaphore(5); // 5 concurrent tabs
-        const tasks = linksToVisit.map(url => sem.run(async () => {
+        const sem = new Semaphore(2); // Reduced to 2 for Render Free Tier stability (512MB RAM)
+        const tasks = linksToVisit.map((url, index) => sem.run(async () => {
             if (validCount >= TARGET_VALID_LEADS) return;
-            const biz = await scrapeListing(context, url, centerLat, centerLng, radiusKm, location, keyword);
-            if (!biz || validCount >= TARGET_VALID_LEADS) return;
+            
+            const taskNum = index + 1;
+            console.log(`[Maps] [Task ${taskNum}/${linksToVisit.length}] Starting extraction for: ${url}`);
+            
+            try {
+                // Add a per-task timeout of 60s to prevent a single hanging site from blocking everything
+                const biz = await Promise.race([
+                    scrapeListing(context, url, centerLat, centerLng, radiusKm, location, keyword),
+                    new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 60000))
+                ]).catch(err => {
+                    console.error(`[Maps] [Task ${taskNum}] Failed or timed out: ${err.message}`);
+                    return null;
+                });
 
-            if (biz.website) {
-                const emailRes = await scrapeEmail(context, biz.website, biz.name, keyword);
-                if (emailRes === 'REJECT_EXPIRED' || emailRes === 'REJECT_UNWANTED') {
-                    console.log(`[Maps] Discarding ${biz.name}: ${emailRes}`);
+                processedCount++;
+                if (!biz) {
+                    console.log(`[Maps] [Task ${taskNum}] Listing extraction returned no result.`);
                     return;
                 }
-                biz.email = emailRes;
-            }
 
-            if (biz.email) {
-                results.push(biz);
-                validCount++;
-                if (validCount >= TARGET_VALID_LEADS) {
-                    console.log(`[Maps] Reached ${TARGET_VALID_LEADS} valid leads. Done.`);
+                console.log(`[Maps] [Task ${taskNum}] Found business: ${biz.name}. Checking for website/email...`);
+
+                if (biz.website) {
+                    const emailRes = await scrapeEmail(context, biz.website, biz.name, keyword).catch(err => {
+                        console.error(`[Maps] [Task ${taskNum}] Email scraping error: ${err.message}`);
+                        return null;
+                    });
+
+                    if (emailRes === 'REJECT_EXPIRED' || emailRes === 'REJECT_UNWANTED') {
+                        console.log(`[Maps] [Task ${taskNum}] Discarding ${biz.name}: ${emailRes}`);
+                        return;
+                    }
+                    biz.email = emailRes;
                 }
+
+                if (biz.email) {
+                    results.push(biz);
+                    validCount++;
+                    console.log(`[Maps] [Task ${taskNum}] SUCCESS! Found email for ${biz.name}. Total found: ${validCount}/${TARGET_VALID_LEADS}`);
+                    if (validCount >= TARGET_VALID_LEADS) {
+                        console.log(`[Maps] Reached ${TARGET_VALID_LEADS} valid leads. Done.`);
+                    }
+                } else {
+                    console.log(`[Maps] [Task ${taskNum}] No email found for ${biz.name}. Skipping.`);
+                }
+            } catch (err: any) {
+                console.error(`[Maps] [Task ${taskNum}] Fatal error in task: ${err.message}`);
             }
         }));
 
         await Promise.allSettled(tasks);
 
-        console.log(`[Maps] Extraction complete. Returning ${results.length} leads.`);
+        console.log(`[Maps] All tasks finished. Total processed: ${processedCount}. Returning ${results.length} valid leads.`);
         return results;
 
     } catch (e) {
