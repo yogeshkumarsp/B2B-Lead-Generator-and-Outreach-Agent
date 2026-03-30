@@ -315,7 +315,7 @@ export async function searchBusinesses(keyword: string, location: string, radius
         // Run the Google Maps Extractor actor
         const run = await client.actor("compass/crawler-google-places").call({
             searchStringsArray: [searchString],
-            maxCrawledPlacesPerSearch: 20, // get a few extra over the target to ensure we find ones with websites
+            maxCrawledPlacesPerSearch: 80, // Request roughly 80 to ensure our fast HTML-only scraper can easily find 10 valid emails
             language: "en",
         });
 
