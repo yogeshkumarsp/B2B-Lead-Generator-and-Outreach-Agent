@@ -128,14 +128,26 @@ export async function searchBusinesses(keyword: string, location: string, radius
                      const urlObj = new URL(record.url);
                      const domain = urlObj.hostname.replace('www.', '').toLowerCase();
                      
-                     // Grab the first cleanly formatted email
-                     const validEmail = emails.find((e: string) => e.includes('@') && !e.includes('.png') && !e.includes('.jpg'));
-                     if (validEmail) {
-                         domainToEmails.set(domain, validEmail);
+                     // Find the first valid email (handle both plain strings and { value: "x@x.com" } objects)
+                     let extractedEmail = null;
+                     for (const e of emails) {
+                         const emailStr = typeof e === 'string' ? e : (e.value || e.email || '');
+                         if (emailStr && typeof emailStr === 'string' && emailStr.includes('@') && !emailStr.includes('.png') && !emailStr.includes('.jpg')) {
+                             extractedEmail = emailStr;
+                             break;
+                         }
                      }
-                 } catch { }
+                     
+                     if (extractedEmail) {
+                         domainToEmails.set(domain, extractedEmail);
+                     }
+                 } catch (err) {
+                     console.error(`[Apify] Error parsing email for ${record.url}:`, err);
+                 }
              }
         }
+        
+        console.log(`[Apify] Mapped ${domainToEmails.size} unique domains with valid emails.`);
         
         // 4. Build final results array capped at TARGET_VALID_LEADS
         let validCount = 0;
