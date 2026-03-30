@@ -8,6 +8,7 @@ class Store {
   private campaigns: Campaign[] = [];
   private logs: AgentLog[] = [];
   private settings: AppSettings = DEFAULT_SETTINGS;
+  private dashboardData: any = null;
 
   constructor() {
     this.load();
@@ -18,6 +19,7 @@ class Store {
     const storedCampaigns = localStorage.getItem('autosdr_campaigns');
     const storedSettings = localStorage.getItem('autosdr_settings');
     const storedLogs = localStorage.getItem('autosdr_logs');
+    const storedDashboard = localStorage.getItem('autosdr_dashboard');
 
     if (storedLeads) this.leads = JSON.parse(storedLeads);
     if (storedCampaigns) this.campaigns = JSON.parse(storedCampaigns);
@@ -25,6 +27,7 @@ class Store {
 
     if (storedSettings) this.settings = JSON.parse(storedSettings);
     if (storedLogs) this.logs = JSON.parse(storedLogs);
+    if (storedDashboard) this.dashboardData = JSON.parse(storedDashboard);
   }
 
   private save() {
@@ -32,6 +35,7 @@ class Store {
     localStorage.setItem('autosdr_campaigns', JSON.stringify(this.campaigns));
     localStorage.setItem('autosdr_settings', JSON.stringify(this.settings));
     localStorage.setItem('autosdr_logs', JSON.stringify(this.logs));
+    localStorage.setItem('autosdr_dashboard', JSON.stringify(this.dashboardData));
   }
 
   // Leads
@@ -143,6 +147,13 @@ class Store {
   getSettings() { return { ...this.settings }; }
   updateSettings(updates: Partial<AppSettings>) {
     this.settings = { ...this.settings, ...updates };
+    this.save();
+  }
+
+  // Dashboard Data
+  getDashboardData() { return this.dashboardData; }
+  updateDashboardData(data: any) {
+    this.dashboardData = data;
     this.save();
   }
 

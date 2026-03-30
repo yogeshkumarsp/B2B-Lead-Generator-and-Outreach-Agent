@@ -103,6 +103,10 @@ model Lead {
   replySentiment  String?
   campaign        Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, intent])
+  @@index([userId, outreachStatus])
+  @@index([userId, status])
 }
 
 model Campaign {
@@ -118,6 +122,8 @@ model Campaign {
   user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   steps             CampaignStep[]
   leads             Lead[]
+
+  @@index([userId, status])
 }
 
 model CampaignStep {

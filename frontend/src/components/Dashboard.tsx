@@ -7,15 +7,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Users, UserCheck, Send, Reply, Star, Clock, Layers, TrendingUp, AlertCircle, Info, CheckCircle, Search, Download, X, ArrowLeft } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
-  const [metrics, setMetrics] = useState({ highIntent: 0, lowIntent: 0, sent: 0, replies: 0, interested: 0, pending: 0, activeCampaigns: 0 });
-  const [hotLeads, setHotLeads] = useState<Lead[]>([]);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]); // specifically for the modal dropdown
-  const [activeCampaigns, setActiveCampaigns] = useState<Campaign[]>([]);
-  const [recentLogs, setRecentLogs] = useState(store.getLogs().slice(0, 10));
-  const [selectedMetric, setSelectedMetric] = useState<{ id: string; title: string; leads: Lead[]; loading?: boolean } | null>(null);
-  const [selectedCampaignInModal, setSelectedCampaignInModal] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
   const mapLead = (l: any) => ({
     ...l,
     name: l.companyName,
@@ -26,6 +17,16 @@ const Dashboard: React.FC = () => {
     lastContactedAt: l.lastContactedAt ? new Date(l.lastContactedAt).getTime() : undefined,
     intent: l.intent || 'LOW'
   });
+
+  const [metrics, setMetrics] = useState(store.getDashboardData()?.metrics || { highIntent: 0, lowIntent: 0, sent: 0, replies: 0, interested: 0, pending: 0, activeCampaigns: 0 });
+  const [hotLeads, setHotLeads] = useState<Lead[]>(store.getDashboardData()?.hotLeads ? store.getDashboardData().hotLeads.map(mapLead) : []);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]); // specifically for the modal dropdown
+  const [activeCampaigns, setActiveCampaigns] = useState<Campaign[]>(store.getDashboardData()?.activeCampaigns || []);
+  const [recentLogs, setRecentLogs] = useState(store.getLogs().slice(0, 10));
+  const [selectedMetric, setSelectedMetric] = useState<{ id: string; title: string; leads: Lead[]; loading?: boolean } | null>(null);
+  const [selectedCampaignInModal, setSelectedCampaignInModal] = useState<string | null>(null);
+  // Only show loading if we have NO cached data
+  const [isLoading, setIsLoading] = useState(!store.getDashboardData());
 
   useEffect(() => {
     const fetchData = async () => {
@@ -38,6 +39,9 @@ const Dashboard: React.FC = () => {
         const data = await dashRes.json();
         const campData = await campRes.json();
         
+        // Update Local Cache for "Instant" feel on next refresh
+        store.updateDashboardData(data);
+
         setMetrics(data.metrics || { highIntent: 0, lowIntent: 0, sent: 0, replies: 0, interested: 0, pending: 0, activeCampaigns: 0 });
         setHotLeads(data.hotLeads ? data.hotLeads.map(mapLead) : []);
         setActiveCampaigns(data.activeCampaigns || []);
