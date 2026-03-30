@@ -43,7 +43,7 @@ try {
     execSync(`"${venvPython}" -m pip install -r server/python/requirements.txt`, { stdio: 'inherit', cwd: __dirname });
     
     console.log('[Setup] Installing Playwright browsers...');
-    execSync(`"${venvPython}" -m playwright install --with-deps chromium`, { stdio: 'inherit', cwd: __dirname });
+    execSync(`"${venvPython}" -m playwright install chromium`, { stdio: 'inherit', cwd: __dirname });
     
     console.log('[Setup] Python setup complete.');
 } catch (error) {
