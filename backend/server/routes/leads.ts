@@ -185,7 +185,7 @@ router.post('/discover', async (req: AuthRequest, res) => {
                     
                     // HIGH = both, LOW = only Email (both are qualified)
                     const intent = (hasPhone && hasEmail) ? 'HIGH' : 'LOW';
-                    const status = hasEmail ? 'QUALIFIED' : 'NEW';
+                    const status = hasEmail ? 'QUALIFIED' : 'UNQUALIFIED';
 
                     const normName = normalizeName(business.name);
                     const normAddr = normalizeName(business.address || "");

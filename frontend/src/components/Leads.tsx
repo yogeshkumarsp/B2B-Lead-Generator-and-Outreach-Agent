@@ -36,7 +36,7 @@ const Leads: React.FC = () => {
             searchLocation: d.searchLocation,
             title: 'Decision Maker',
             source: 'Postgres DB',
-            status: d.status || LeadStatus.UNPROCESSED,
+            status: (d.status as LeadStatus) || LeadStatus.UNQUALIFIED,
             outreachStatus: (d.outreachStatus as OutreachStatus) || OutreachStatus.PENDING,
             followUpCount: d.followUpCount || 0,
             intent: d.intent || 'LOW'

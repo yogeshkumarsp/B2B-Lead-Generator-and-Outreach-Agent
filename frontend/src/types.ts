@@ -2,9 +2,8 @@
 export enum LeadStatus {
   QUALIFIED = 'QUALIFIED',
   REJECTED = 'REJECTED',
-  UNPROCESSED = 'UNPROCESSED',
-  HOLD = 'HOLD',
-  NEW = 'NEW'
+  UNQUALIFIED = 'UNQUALIFIED',
+  HOLD = 'HOLD'
 }
 
 export enum OutreachStatus {

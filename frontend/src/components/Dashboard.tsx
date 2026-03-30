@@ -13,7 +13,7 @@ const Dashboard: React.FC = () => {
     company: l.companyName,
     location: l.address,
     outreachStatus: (l.outreachStatus as OutreachStatus) || OutreachStatus.PENDING,
-    status: (l.status as LeadStatus) || LeadStatus.UNPROCESSED,
+    status: (l.status as LeadStatus) || LeadStatus.UNQUALIFIED,
     lastContactedAt: l.lastContactedAt ? new Date(l.lastContactedAt).getTime() : undefined,
     intent: l.intent || 'LOW'
   });

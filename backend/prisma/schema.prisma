@@ -88,7 +88,7 @@ model Lead {
   website         String?
   address         String?
   intent          String    @default("LOW")
-  status          String    @default("NEW")
+  status          String    @default("UNQUALIFIED")
   outreachStatus  String    @default("PENDING")
   outreachMessage String?
   lastContactedAt DateTime?
