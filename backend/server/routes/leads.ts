@@ -181,7 +181,8 @@ router.post('/discover', async (req: AuthRequest, res) => {
 
                 await Promise.all(uniqueTasks.map(async (business: any) => {
                     const hasPhone = !!business.phone;
-                    const intent = hasPhone ? 'HIGH' : 'LOW';
+                    const hasEmail = !!business.email;
+                    const intent = (hasPhone || hasEmail) ? 'HIGH' : 'LOW';
 
                     const normName = normalizeName(business.name);
                     const normAddr = normalizeName(business.address || "");
