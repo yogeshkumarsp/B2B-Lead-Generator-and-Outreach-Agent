@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,31 +22,28 @@ export const searchBusinesses = async (keyword: string, location: string): Promi
         const pythonScriptPath = path.join(__dirname, '../python/maps_scraper.py');
         console.log(`[Maps] Spawning scraper: py "${pythonScriptPath}" "${keyword}" "${location}"`);
 
-        // Cross-platform Python detection
-        // On Render (Linux), we need 'python3' or 'python'. On Windows, 'py' or 'python'.
-        const trySpawn = (cmd: string) => {
-            console.log(`[Maps] Attempting to spawn scraper with command: ${cmd}`);
-            return spawn(cmd, [pythonScriptPath, keyword, location]);
-        };
+        // Check for local venv python built by Render
+        const venvPythonLinux = path.join(__dirname, '../../.venv/bin/python');
+        const venvPythonWin = path.join(__dirname, '../../.venv/Scripts/python.exe');
+
+        let pythonExecutable = 'python3';
+        if (fs.existsSync(venvPythonLinux)) {
+            pythonExecutable = venvPythonLinux;
+        } else if (fs.existsSync(venvPythonWin)) {
+            pythonExecutable = venvPythonWin;
+        } else {
+            pythonExecutable = process.platform === 'win32' ? 'python' : 'python3';
+        }
+
+        console.log(`[Maps] Spawning scraper: ${pythonExecutable} "${pythonScriptPath}" "${keyword}" "${location}"`);
 
         let pythonProcess: any;
         try {
-            // Priority: python3 (Linux/Mac standard) -> python (Generic) -> py (Windows launcher)
-            pythonProcess = spawn('python3', [pythonScriptPath, keyword, location]);
-            
-            pythonProcess.on('error', (err: any) => {
-                if (err.code === 'ENOENT') {
-                    // Try next
-                    pythonProcess = spawn('python', [pythonScriptPath, keyword, location]);
-                    pythonProcess.on('error', (err2: any) => {
-                        if (err2.code === 'ENOENT') {
-                            pythonProcess = spawn('py', [pythonScriptPath, keyword, location]);
-                        }
-                    });
-                }
-            });
+            pythonProcess = spawn(pythonExecutable, [pythonScriptPath, keyword, location]);
         } catch (e) {
-            pythonProcess = spawn('py', [pythonScriptPath, keyword, location]);
+            console.error('[Maps] Failed to start python process synchronously:', e);
+            resolve([]);
+            return;
         }
 
         let dataString = '';

@@ -6,7 +6,7 @@
   "scripts": {
     "predev": "node -e \"const {execSync}=require('child_process'); try { if(process.platform==='win32') execSync('FOR /F \\\"tokens=5\\\" %a IN (\\'netstat -ano ^| findstr :6001\\') DO taskkill /F /PID %a', {stdio:'ignore'}); else execSync('lsof -ti:6001 | xargs kill -9', {stdio:'ignore'}); } catch(e){}\"",
     "dev": "nodemon --watch server --ext ts,js --exec tsx server/index.ts",
-    "build:python": "python3 -m pip install -r server/python/requirements.txt && python3 -m playwright install --with-deps chromium",
+    "build:python": "node setup_python.js",
     "build": "prisma generate && npm run build:python",
     "start": "tsx server/index.ts"
   },
