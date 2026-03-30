@@ -121,7 +121,12 @@ const Leads: React.FC = () => {
       });
       
       if (!initRes.ok) throw new Error('Failed to start discovery job');
-      const { jobId } = await initRes.json();
+      const data = await initRes.json();
+      const jobId = data?.jobId;
+
+      if (!jobId) {
+          throw new Error("No Job ID returned from server");
+      }
 
       // 2. Poll Status
       const pollInterval = setInterval(async () => {

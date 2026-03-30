@@ -21,25 +21,47 @@ export const searchBusinesses = async (keyword: string, location: string): Promi
         const pythonScriptPath = path.join(__dirname, '../python/maps_scraper.py');
         console.log(`[Maps] Spawning scraper: py "${pythonScriptPath}" "${keyword}" "${location}"`);
 
-        // Use 'py' launcher on Windows, fallback to 'python3' or 'python' on others if needed
-        // Since we know this environment uses 'py', we'll stick with that for now.
-        // In a real production app, we might want more robust python detection.
-        const pythonProcess = spawn('py', [pythonScriptPath, keyword, location]);
+        // Cross-platform Python detection
+        // On Render (Linux), we need 'python3' or 'python'. On Windows, 'py' or 'python'.
+        const trySpawn = (cmd: string) => {
+            console.log(`[Maps] Attempting to spawn scraper with command: ${cmd}`);
+            return spawn(cmd, [pythonScriptPath, keyword, location]);
+        };
+
+        let pythonProcess: any;
+        try {
+            // Priority: python3 (Linux/Mac standard) -> python (Generic) -> py (Windows launcher)
+            pythonProcess = spawn('python3', [pythonScriptPath, keyword, location]);
+            
+            pythonProcess.on('error', (err: any) => {
+                if (err.code === 'ENOENT') {
+                    // Try next
+                    pythonProcess = spawn('python', [pythonScriptPath, keyword, location]);
+                    pythonProcess.on('error', (err2: any) => {
+                        if (err2.code === 'ENOENT') {
+                            pythonProcess = spawn('py', [pythonScriptPath, keyword, location]);
+                        }
+                    });
+                }
+            });
+        } catch (e) {
+            pythonProcess = spawn('py', [pythonScriptPath, keyword, location]);
+        }
 
         let dataString = '';
         let errorString = '';
 
-        pythonProcess.stdout.on('data', (data) => {
+        pythonProcess.stdout.on('data', (data: Buffer | string) => {
             dataString += data.toString();
         });
 
-        pythonProcess.stderr.on('data', (data) => {
+        pythonProcess.stderr.on('data', (data: Buffer | string) => {
             const line = data.toString().trim();
             if (line) console.log(`[Maps Scraper] ${line}`);
             errorString += line;
         });
 
-        pythonProcess.on('close', (code) => {
+        pythonProcess.on('close', (code: number | null) => {
             if (code !== 0) {
                 console.error(`[Maps] Scraper process exited with code ${code}`);
                 // Don't reject purely on code != 0 if we have data, but usually it means error
@@ -89,7 +111,7 @@ export const searchBusinesses = async (keyword: string, location: string): Promi
             }
         });
 
-        pythonProcess.on('error', (err) => {
+        pythonProcess.on('error', (err: Error) => {
             console.error('[Maps] Failed to start python process:', err);
             resolve([]);
         });
