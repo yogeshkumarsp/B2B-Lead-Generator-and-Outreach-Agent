@@ -5,6 +5,7 @@ import { requireAuth, AuthRequest } from '../middleware/auth';
 import { GoogleGenAI } from '@google/genai';
 import { backendAgent } from '../services/agent';
 import { executeWithRetry } from '../../../frontend/src/services/gemini.js';
+import { jobManager } from '../services/jobManager';
 
 const router = express.Router();
 
@@ -119,7 +120,7 @@ ${JSON.stringify(filtered.map((b, i) => ({ index: i, name: b.name, types: b.type
     }
 };
 
-// POST /api/leads/discover
+// POST /api/leads/discover — starts background job
 router.post('/discover', async (req: AuthRequest, res) => {
     try {
         const { niche, location } = req.body;
@@ -129,142 +130,123 @@ router.post('/discover', async (req: AuthRequest, res) => {
             return res.status(400).json({ error: 'Niche and location are required' });
         }
 
-        const nicheKey = niche.trim().toLowerCase();
-        const locationKey = location.trim().toLowerCase();
+        const jobId = jobManager.createJob(userId);
 
-        console.log(`[API] Discovery for user=${userId}: niche="${nicheKey}", location="${locationKey}"`);
+        // Start discovery in background
+        (async () => {
+            try {
+                jobManager.updateJob(jobId, { status: 'RUNNING' });
+                
+                const nicheKey = niche.trim().toLowerCase();
+                const locationKey = location.trim().toLowerCase();
 
-        // Check cached leads for this user
-        const cachedLeads = await prisma.lead.findMany({
-            where: {
-                userId,
-                AND: [
-                    { OR: [{ searchNiche: { contains: nicheKey, mode: 'insensitive' } }, { industry: { contains: nicheKey, mode: 'insensitive' } }] },
-                    { OR: [{ searchLocation: { contains: locationKey, mode: 'insensitive' } }, { address: { contains: locationKey, mode: 'insensitive' } }] }
-                ]
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-
-        console.log(`[API] Found ${cachedLeads.length} cached leads for user.`);
-
-        // Always run fresh scrape
-        console.log(`[API] Found ${cachedLeads.length} cached leads for user.`);
-
-        // Always run fresh scrape
-        let businesses = await searchBusinesses(niche, location);
-        console.log(`[API] Found ${businesses.length} raw businesses from Maps.`);
-
-        // Pass through AI Filter to remove irrelevant businesses 
-        businesses = await filterBusinessesByNiche(businesses, niche);
-
-        const normalizeName = (name: string) => {
-            return name.toLowerCase()
-                .replace(/pvt\.?\s*ltd\.?|private limited|llp|inc|corp|co\.?|ltd\.?/gi, '')
-                .replace(/[^a-z0-9]/g, '');
-        };
-
-        const finalResultsMap = new Map();
-        // Seed map with existing leads for this specific niche (to avoid duplicates across discoveries)
-        cachedLeads.forEach(l => {
-            const key = `${normalizeName(l.companyName)}_${normalizeName(l.address || "")}`;
-            finalResultsMap.set(key, l);
-        });
-
-        const uniqueTasks = businesses.filter((business: any) => {
-            const normName = normalizeName(business.name);
-            const normAddr = normalizeName(business.address || "");
-            const uniqueKey = `${normName}_${normAddr}`;
-            if (finalResultsMap.has(uniqueKey)) return false;
-
-            // Track emails inside the batch to prevent concurrent identical inserts
-            const genericEmails = ['wecare@medplusindia.com', 'customerservice@apollopharmacy.org'];
-            const isGeneric = business.email && genericEmails.some((ge: string) => business.email.toLowerCase().includes(ge));
-            
-            if (business.email && !isGeneric) {
-                const emailKey = `email_${business.email.toLowerCase()}`;
-                if (finalResultsMap.has(emailKey)) return false;
-                finalResultsMap.set(emailKey, { pending: true });
-            }
-
-            // Temporarily set a dummy to prevent duplicates inside the batch itself
-            finalResultsMap.set(uniqueKey, { pending: true });
-            return true;
-        });
-
-        await Promise.all(uniqueTasks.map(async (business: any) => {
-            const hasPhone = !!business.phone;
-            
-            // Refined Logic: If phone is available, it's HIGH intent. If not, it's LOW.
-            const isHighIntent = hasPhone;
-            const intent = isHighIntent ? 'HIGH' : 'LOW';
-
-            const normName = normalizeName(business.name);
-            const normAddr = normalizeName(business.address || "");
-            const uniqueKey = `${normName}_${normAddr}`;
-
-            // 2. If not in current map, check DB by exact name AND address to be sure
-            let existing: any = await prisma.lead.findFirst({
-                where: {
-                    userId,
-                    companyName: { equals: business.name, mode: 'insensitive' },
-                    address: { equals: business.address, mode: 'insensitive' }
-                }
-            });
-
-            // 3. Last fallback: Check by Email match ONLY if it's NOT a generic franchise email
-            const genericEmails = ['wecare@medplusindia.com', 'customerservice@apollopharmacy.org'];
-            if (!existing && business.email && !genericEmails.some((ge: string) => business.email.toLowerCase().includes(ge))) {
-                existing = await prisma.lead.findFirst({
-                    where: { userId, email: { equals: business.email, mode: 'insensitive' } }
-                });
-            }
-
-            if (!existing) {
-                const created = await prisma.lead.create({
-                    data: {
+                // 1. Existing Leads
+                const cachedLeads = await prisma.lead.findMany({
+                    where: {
                         userId,
-                        companyName: business.name,
-                        industry: niche,
-                        phone: business.phone || '',
-                        email: business.email || '',
-                        website: business.website || '',
-                        address: business.address || location,
-                        intent,
-                        status: intent === 'HIGH' ? 'QUALIFIED' : 'NEW',
-                        searchNiche: nicheKey,
-                        searchLocation: locationKey
+                        AND: [
+                            { OR: [{ searchNiche: { contains: nicheKey, mode: 'insensitive' } }, { industry: { contains: nicheKey, mode: 'insensitive' } }] },
+                            { OR: [{ searchLocation: { contains: locationKey, mode: 'insensitive' } }, { address: { contains: locationKey, mode: 'insensitive' } }] }
+                        ]
                     }
                 });
-                console.log(`[API] Created record for "${business.name}" at "${business.address}"`);
-                finalResultsMap.set(uniqueKey, created);
-            } else {
-                // If it exists, ensure search niche/location are updated if missing
-                if (!existing.searchNiche || !existing.searchLocation) {
-                    const updated = await prisma.lead.update({
-                        where: { id: existing.id },
-                        data: { searchNiche: nicheKey, searchLocation: locationKey }
+
+                // 2. Scrape
+                let businesses = await searchBusinesses(niche, location);
+                
+                // 3. AI Filter
+                businesses = await filterBusinessesByNiche(businesses, niche);
+
+                const normalizeName = (name: string) => {
+                    return name.toLowerCase()
+                        .replace(/pvt\.?\s*ltd\.?|private limited|llp|inc|corp|co\.?|ltd\.?/gi, '')
+                        .replace(/[^a-z0-9]/g, '');
+                };
+
+                const finalResultsMap = new Map();
+                cachedLeads.forEach(l => {
+                    const key = `${normalizeName(l.companyName)}_${normalizeName(l.address || "")}`;
+                    finalResultsMap.set(key, l);
+                });
+
+                const uniqueTasks = businesses.filter((business: any) => {
+                    const normName = normalizeName(business.name);
+                    const normAddr = normalizeName(business.address || "");
+                    const uniqueKey = `${normName}_${normAddr}`;
+                    if (finalResultsMap.has(uniqueKey)) return false;
+                    
+                    finalResultsMap.set(uniqueKey, { pending: true });
+                    return true;
+                });
+
+                await Promise.all(uniqueTasks.map(async (business: any) => {
+                    const hasPhone = !!business.phone;
+                    const intent = hasPhone ? 'HIGH' : 'LOW';
+
+                    const normName = normalizeName(business.name);
+                    const normAddr = normalizeName(business.address || "");
+                    const uniqueKey = `${normName}_${normAddr}`;
+
+                    let existing: any = await prisma.lead.findFirst({
+                        where: {
+                            userId,
+                            companyName: { equals: business.name, mode: 'insensitive' },
+                            address: { equals: business.address, mode: 'insensitive' }
+                        }
                     });
-                    finalResultsMap.set(uniqueKey, updated);
-                } else {
-                    finalResultsMap.set(uniqueKey, existing);
-                }
+
+                    if (!existing) {
+                        const created = await prisma.lead.create({
+                            data: {
+                                userId,
+                                companyName: business.name,
+                                industry: niche,
+                                phone: business.phone || '',
+                                email: business.email || '',
+                                website: business.website || '',
+                                address: business.address || location,
+                                intent,
+                                status: intent === 'HIGH' ? 'QUALIFIED' : 'NEW',
+                                searchNiche: nicheKey,
+                                searchLocation: locationKey
+                            }
+                        });
+                        finalResultsMap.set(uniqueKey, created);
+                    } else {
+                        finalResultsMap.set(uniqueKey, existing);
+                    }
+                }));
+
+                const finalLeads = Array.from(finalResultsMap.values()).filter(l => !l.pending);
+                
+                // Trigger agent
+                backendAgent.forceProcessUser(userId).catch(e => console.error('[API] Agent trigger error:', e));
+
+                jobManager.updateJob(jobId, { status: 'COMPLETED', results: finalLeads });
+            } catch (err: any) {
+                console.error('[Discovery Job] Background error:', err);
+                jobManager.updateJob(jobId, { status: 'FAILED', error: err?.message || 'Unknown discovery error' });
             }
-        }));
+        })();
 
-        const finalLeads = Array.from(finalResultsMap.values());
-        console.log(`[API] Discovery complete. Returning ${finalLeads.length} leads.`);
-        
-        // Trigger agent to start outreach immediately for these new leads
-        backendAgent.forceProcessUser(userId).catch(err => {
-            console.error('[API] Failed to trigger agent after discovery:', err);
-        });
-
-        res.json(finalLeads);
+        res.status(202).json({ jobId });
     } catch (error) {
-        console.error('[API] Discovery error:', error);
-        res.status(500).json({ error: 'Failed to discover leads' });
+        console.error('[API] Discovery initiation error:', error);
+        res.status(500).json({ error: 'Failed to initiate discovery' });
     }
+});
+
+// GET /api/leads/discover/status/:jobId — poll status
+router.get('/discover/status/:jobId', (req: AuthRequest, res) => {
+    const job = jobManager.getJob(req.params.jobId as string);
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    if (job.userId !== req.userId) return res.status(403).json({ error: 'Forbidden' });
+    
+    res.json({
+        status: job.status,
+        results: job.status === 'COMPLETED' ? job.results : [],
+        error: job.error
+    });
 });
 
 // GET /api/leads
