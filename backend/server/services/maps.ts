@@ -22,24 +22,17 @@ export const searchBusinesses = async (keyword: string, location: string): Promi
         const pythonScriptPath = path.join(__dirname, '../python/maps_scraper.py');
         console.log(`[Maps] Spawning scraper: py "${pythonScriptPath}" "${keyword}" "${location}"`);
 
-        // Check for local venv python built by Render
-        const venvPythonLinux = path.join(__dirname, '../../.venv/bin/python');
-        const venvPythonWin = path.join(__dirname, '../../.venv/Scripts/python.exe');
-
-        let pythonExecutable = 'python3';
-        if (fs.existsSync(venvPythonLinux)) {
-            pythonExecutable = venvPythonLinux;
-        } else if (fs.existsSync(venvPythonWin)) {
-            pythonExecutable = venvPythonWin;
-        } else {
-            pythonExecutable = process.platform === 'win32' ? 'python' : 'python3';
-        }
+        // Use system python but point PYTHONPATH to our custom build target dir
+        const targetDir = path.join(__dirname, '../../.python_packages');
+        const pythonExecutable = process.platform === 'win32' ? 'python' : 'python3';
 
         console.log(`[Maps] Spawning scraper: ${pythonExecutable} "${pythonScriptPath}" "${keyword}" "${location}"`);
 
         let pythonProcess: any;
         try {
-            pythonProcess = spawn(pythonExecutable, [pythonScriptPath, keyword, location]);
+            pythonProcess = spawn(pythonExecutable, [pythonScriptPath, keyword, location], {
+                env: { ...process.env, PYTHONPATH: targetDir }
+            });
         } catch (e) {
             console.error('[Maps] Failed to start python process synchronously:', e);
             resolve([]);

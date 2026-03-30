@@ -1,52 +1,71 @@
 import { execSync } from 'child_process';
 import os from 'os';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const venvPath = path.join(__dirname, '.venv');
 const isWin = os.platform() === 'win32';
 
-// Identify the system python command to create the venv
+// Identify the system python command based on OS
 let pythonCmd = 'python3';
-try {
-    // Check if python3 exists
-    execSync('python3 --version', { stdio: 'ignore' });
-} catch (e) {
-    // Fallback to python or py
+if (isWin) {
     try {
-        execSync('python --version', { stdio: 'ignore' });
-        pythonCmd = 'python';
-    } catch (e2) {
+        execSync('py --version', { stdio: 'ignore' });
         pythonCmd = 'py';
+    } catch (e) {
+        pythonCmd = 'python';
+    }
+} else {
+    try {
+        execSync('python3 --version', { stdio: 'ignore' });
+    } catch (e) {
+        pythonCmd = 'python';
     }
 }
 
-const venvPython = isWin ? path.join(venvPath, 'Scripts', 'python.exe') : path.join(venvPath, 'bin', 'python');
+const targetDir = path.join(__dirname, '.python_packages');
 
-console.log(`[Setup] Using system python: ${pythonCmd}`);
-console.log(`[Setup] Target venv python: ${venvPython}`);
+console.log('==================================================');
+console.log(`[Setup] System python command selected: ${pythonCmd}`);
+console.log(`[Setup] Target packages directory: ${targetDir}`);
+console.log('==================================================');
 
 try {
-    if (!fs.existsSync(venvPath)) {
-        console.log(`[Setup] Creating Python virtual environment at ${venvPath}...`);
-        execSync(`${pythonCmd} -m venv .venv`, { stdio: 'inherit', cwd: __dirname });
-    } else {
-        console.log(`[Setup] Virtual environment already exists at ${venvPath}.`);
-    }
+    // Ensure python environment is ready and we install packages correctly.
+    // We use --target so packages go into a local directory and bypass any venv/system permission issues.
+    console.log('[Setup] STEP 1/2: Installing python requirements...');
     
-    console.log('[Setup] Upgrading pip...');
-    execSync(`"${venvPython}" -m pip install --upgrade pip`, { stdio: 'inherit', cwd: __dirname });
+    // Attempt pip installation directly.
+    execSync(`${pythonCmd} -m pip install --target .python_packages -r server/python/requirements.txt`, { stdio: 'inherit', cwd: __dirname });
     
-    console.log('[Setup] Installing requirements...');
-    execSync(`"${venvPython}" -m pip install -r server/python/requirements.txt`, { stdio: 'inherit', cwd: __dirname });
+    console.log('[Setup] STEP 1/2: Complete!');
+    console.log('--------------------------------------------------');
     
-    console.log('[Setup] Installing Playwright browsers...');
-    execSync(`"${venvPython}" -m playwright install chromium`, { stdio: 'inherit', cwd: __dirname });
+    console.log('[Setup] STEP 2/2: Installing Playwright chromium...');
     
-    console.log('[Setup] Python setup complete.');
+    // We must pass PYTHONPATH so python can locate the 'playwright' module we just installed in '.python_packages'
+    const env = { ...process.env, PYTHONPATH: targetDir };
+    execSync(`${pythonCmd} -m playwright install chromium`, { stdio: 'inherit', cwd: __dirname, env: env });
+    
+    console.log('[Setup] STEP 2/2: Complete!');
+    console.log('==================================================');
+    console.log('[Setup] Python setup fully successful! 🎉');
+    
 } catch (error) {
-    console.error('[Setup] Error during Python setup:', error.message);
+    console.error('\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+    console.error('           [Setup] ERROR OCCURRED!');
+    console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+    console.error('Message:', error.message);
+    
+    if (error.stdout) {
+        console.error('\n--- STDOUT ---');
+        console.error(error.stdout.toString());
+    }
+    if (error.stderr) {
+        console.error('\n--- STDERR ---');
+        console.error(error.stderr.toString());
+    }
+    console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n');
     process.exit(1);
 }
