@@ -32,8 +32,18 @@ console.log(`[Setup] Target packages directory: ${targetDir}`);
 console.log('==================================================');
 
 try {
-    // Ensure python environment is ready and we install packages correctly.
-    // We use --target so packages go into a local directory and bypass any venv/system permission issues.
+    // 0. Check if pip is actually installed on this minimal server image!
+    try {
+        console.log('[Setup] Checking if pip is installed...');
+        execSync(`${pythonCmd} -m pip --version`, { stdio: 'ignore' });
+        console.log('[Setup] pip is present!');
+    } catch (e) {
+        console.log('[Setup] pip is MISSING! Downloading and installing pip...');
+        execSync(`curl -sS https://bootstrap.pypa.io/get-pip.py -o get-pip.py`, { stdio: 'inherit', cwd: __dirname });
+        execSync(`${pythonCmd} get-pip.py --user`, { stdio: 'inherit', cwd: __dirname });
+        console.log('[Setup] pip installed successfully!');
+    }
+
     console.log('[Setup] STEP 1/2: Installing python requirements...');
     
     // Attempt pip installation directly.
