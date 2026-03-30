@@ -324,15 +324,16 @@ async function scrapeListing(
     try {
         page = await context.newPage();
         await page.route('**/*', route => {
-            if (['image', 'stylesheet', 'font', 'media', 'other'].includes(route.request().resourceType())) {
+            if (['image', 'font', 'media', 'other'].includes(route.request().resourceType())) {
                 route.abort();
             } else {
                 route.continue();
             }
         });
 
-        await page.goto(url, { timeout: PAGE_TIMEOUT_MS, waitUntil: 'domcontentloaded' });
-
+        const gotoStart = Date.now();
+        await page.goto(url, { timeout: 25000, waitUntil: 'domcontentloaded' });
+        
         // Distance check
         if (centerLat !== null && centerLng !== null) {
             const currentUrl = page.url();
@@ -355,8 +356,13 @@ async function scrapeListing(
             }
         }
 
-        try { await page.waitForSelector('h1', { timeout: 12000 }); }
-        catch { await page.close(); return null; }
+        try { 
+            await page.waitForSelector('h1', { timeout: 15000 }); 
+        } catch (err: any) { 
+            console.log(`[Maps] ⚠️ waitForSelector('h1') failed after ${Date.now() - gotoStart}ms: ${err.message}`);
+            await page.close(); 
+            return null; 
+        }
 
         const rawName = await page.locator('h1').first().innerText();
         const name = cleanBusinessName(rawName);
@@ -449,7 +455,8 @@ async function scrapeListing(
             place_id: 'scraped_' + name.replace(/\s/g, '_'),
             types
         };
-    } catch (e) {
+    } catch (e: any) {
+        console.error(`[Maps] ❌ Fatal error in scrapeListing: ${e.message}`);
         try { if (page) await page.close(); } catch { }
         return null;
     }
@@ -458,8 +465,18 @@ async function scrapeListing(
 // ─── Main Entry Point ─────────────────────────────────────────────────────────
 
 export async function searchBusinesses(keyword: string, location: string, radius = '60'): Promise<BusinessResult[]> {
+    const startTime = Date.now();
+    const GLOBAL_TIMEOUT_MS = 85000; // 85 seconds to allow safe shutdown within 90s
+    let timeLimitReached = false;
+    
+    const globalTimer = setTimeout(() => {
+        timeLimitReached = true;
+        console.log('[Maps] === 90 SECOND GLOBAL TIME LIMIT REACHED ===');
+    }, GLOBAL_TIMEOUT_MS);
+
     const radiusKm = parseFloat(radius) || 60;
     let browser: Browser | null = null;
+    let results: BusinessResult[] = [];
 
     try {
         browser = await chromium.launch({
@@ -479,14 +496,14 @@ export async function searchBusinesses(keyword: string, location: string, radius
 
         // 1. Geocode
         console.log(`[Maps] Geocoding location: ${location}`);
-        await page.goto(`https://www.google.com/maps/search/${encodeURIComponent(location)}`, { timeout: 60000, waitUntil: 'domcontentloaded' });
+        await page.goto(`https://www.google.com/maps/search/${encodeURIComponent(location)}`, { timeout: 45000, waitUntil: 'domcontentloaded' }).catch(() => {});
 
         try {
             const acceptBtn = page.locator('button[aria-label="Accept all"]');
-            if (await acceptBtn.isVisible({ timeout: 4000 })) await acceptBtn.click();
+            if (await acceptBtn.isVisible({ timeout: 2000 })) await acceptBtn.click();
         } catch { }
 
-        try { await page.waitForURL('**/@*', { timeout: 10000 }); } catch { }
+        try { await page.waitForURL('**/@*', { timeout: 8000 }); } catch { }
 
         const coordMatch = page.url().match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
         let centerLat: number | null = null, centerLng: number | null = null;
@@ -499,8 +516,10 @@ export async function searchBusinesses(keyword: string, location: string, radius
             searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(keyword + ' ' + location)}/@${coordMatch[1]},${coordMatch[2]},${zoom}`;
         }
 
+        if (timeLimitReached) throw new Error('Timeout reached during geocoding');
+
         console.log(`[Maps] Search URL: ${searchUrl}`);
-        await page.goto(searchUrl, { timeout: 60000, waitUntil: 'domcontentloaded' });
+        await page.goto(searchUrl, { timeout: 45000, waitUntil: 'domcontentloaded' }).catch(() => {});
 
         try { await page.waitForSelector('div[role="feed"]', { timeout: 5000 }); }
         catch { try { await page.waitForSelector('a[href*="/maps/place/"]', { timeout: 5000 }); } catch { } }
@@ -510,6 +529,7 @@ export async function searchBusinesses(keyword: string, location: string, radius
             const feed = page.locator('div[role="feed"]').first();
             if (await feed.count() > 0) {
                 for (let i = 0; i < 4; i++) {
+                    if (timeLimitReached) break;
                     await feed.evaluate(n => { (n as HTMLElement).scrollTop = (n as HTMLElement).scrollHeight; });
                     await sleep(200);
                 }
@@ -523,6 +543,7 @@ export async function searchBusinesses(keyword: string, location: string, radius
         } else {
             const listings = await page.locator('a[href*="/maps/place/"]').all();
             for (const listing of listings) {
+                if (timeLimitReached) break;
                 const href = await listing.getAttribute('href');
                 if (!href) continue;
 
@@ -537,34 +558,37 @@ export async function searchBusinesses(keyword: string, location: string, radius
         }
         await page.close();
 
+        if (timeLimitReached) {
+            console.log(`[Maps] Timed out before extraction started. Returning empty.`);
+            return results;
+        }
+
         console.log(`[Maps] Found ${linksToVisit.length} candidate listings. Starting extraction...`);
 
         // 3. Concurrent extraction
-        console.log(`[Maps] Starting concurrent extraction for ${linksToVisit.length} listings...`);
-        const results: BusinessResult[] = [];
         let validCount = 0;
         let processedCount = 0;
 
-        const sem = new Semaphore(4); // Increased concurrency for speed
+        const sem = new Semaphore(2); // Reduced concurrency to 2 to prevent CPU throttling on Render
         const tasks = linksToVisit.map((url, index) => sem.run(async () => {
-            if (validCount >= TARGET_VALID_LEADS) return;
+            if (validCount >= TARGET_VALID_LEADS || timeLimitReached) return;
             
             const taskNum = index + 1;
             console.log(`[Maps] [Task ${taskNum}/${linksToVisit.length}] Starting extraction for: ${url}`);
             
             try {
-                // Aggressive 25s timeout to skip slow websites and process the pool faster
+                // Aggressive 30s timeout to skip slow websites and process the pool faster
                 const biz = await Promise.race([
                     scrapeListing(context, url, centerLat, centerLng, radiusKm, location, keyword),
-                    new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 25000))
+                    new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 30000))
                 ]).catch(err => {
                     console.error(`[Maps] [Task ${taskNum}] Failed or timed out: ${err.message}`);
                     return null;
                 });
 
                 processedCount++;
-                if (!biz) {
-                    console.log(`[Maps] [Task ${taskNum}] Listing extraction returned no result.`);
+                if (!biz || timeLimitReached) {
+                    if (!biz && !timeLimitReached) console.log(`[Maps] [Task ${taskNum}] Listing extraction returned no result.`);
                     return;
                 }
 
@@ -583,14 +607,14 @@ export async function searchBusinesses(keyword: string, location: string, radius
                     biz.email = emailRes;
                 }
 
-                if (biz.email) {
+                if (biz.email && !timeLimitReached) {
                     results.push(biz);
                     validCount++;
                     console.log(`[Maps] [Task ${taskNum}] SUCCESS! Found email for ${biz.name}. Total found: ${validCount}/${TARGET_VALID_LEADS}`);
                     if (validCount >= TARGET_VALID_LEADS) {
                         console.log(`[Maps] Reached ${TARGET_VALID_LEADS} valid leads. Done.`);
                     }
-                } else {
+                } else if (!biz.email) {
                     console.log(`[Maps] [Task ${taskNum}] No email found for ${biz.name}. Skipping.`);
                 }
             } catch (err: any) {
@@ -598,15 +622,26 @@ export async function searchBusinesses(keyword: string, location: string, radius
             }
         }));
 
-        await Promise.allSettled(tasks);
+        await Promise.race([
+            Promise.allSettled(tasks),
+            new Promise<void>(resolve => {
+                const interval = setInterval(() => {
+                    if (timeLimitReached) {
+                        clearInterval(interval);
+                        resolve();
+                    }
+                }, 500);
+            })
+        ]);
 
-        console.log(`[Maps] All tasks finished. Total processed: ${processedCount}. Returning ${results.length} valid leads.`);
+        console.log(`[Maps] All tasks finished or timed out. Total processed: ${processedCount}. Returning ${results.length} valid leads.`);
         return results;
 
     } catch (e) {
         console.error('[Maps] Fatal scraper error:', e);
-        return [];
+        return results;
     } finally {
+        clearTimeout(globalTimer);
         if (browser) await browser.close().catch(() => { });
     }
 }
