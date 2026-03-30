@@ -526,7 +526,7 @@ export async function searchBusinesses(keyword: string, location: string, radius
 
         // Scroll to load more results
         try {
-            const feed = page.locator('div[role="feed"]').first();
+        const feed = page.locator('div[role="feed"]').first();
             if (await feed.count() > 0) {
                 for (let i = 0; i < 4; i++) {
                     if (timeLimitReached) break;
@@ -556,57 +556,90 @@ export async function searchBusinesses(keyword: string, location: string, radius
                 if (linksToVisit.length >= MAX_LINKS) break;
             }
         }
-        await page.close();
 
-        if (timeLimitReached) {
-            console.log(`[Maps] Timed out before extraction started. Returning empty.`);
-            return results;
-        }
+        console.log(`[Maps] Found ${linksToVisit.length} candidate listings. Starting sequential extraction on single page...`);
 
-        console.log(`[Maps] Found ${linksToVisit.length} candidate listings. Starting extraction...`);
-
-        // 3. Concurrent extraction
+        // 3. Sequential extraction using the SAME page to save massive CPU overhead on Render
         let validCount = 0;
         let processedCount = 0;
 
-        const sem = new Semaphore(1); // Set concurrency to 1 so the microscopic Render CPU doesn't freeze
-        const tasks = linksToVisit.map((url, index) => sem.run(async () => {
-            if (validCount >= TARGET_VALID_LEADS || timeLimitReached) return;
+        for (let i = 0; i < linksToVisit.length; i++) {
+            if (validCount >= TARGET_VALID_LEADS || timeLimitReached) break;
             
-            const taskNum = index + 1;
-            console.log(`[Maps] [Task ${taskNum}/${linksToVisit.length}] Starting extraction for: ${url}`);
+            const taskNum = i + 1;
+            const url = linksToVisit[i];
+            console.log(`[Maps] [Task ${taskNum}/${linksToVisit.length}] Visiting: ${url}`);
             
-            let timeoutId: NodeJS.Timeout;
+            processedCount++;
+            
             try {
-                // Aggressive 25s timeout to skip slow websites and process the pool faster
-                const biz = await Promise.race([
-                    scrapeListing(context, url, centerLat, centerLng, radiusKm, location, keyword),
-                    new Promise<null>((_, reject) => {
-                        timeoutId = setTimeout(() => reject(new Error('Timeout')), 25000);
-                    })
-                ]).catch(err => {
-                    console.error(`[Maps] [Task ${taskNum}] Failed or timed out: ${err.message}`);
-                    return null;
-                });
-                clearTimeout(timeoutId!);
-
-                processedCount++;
-                if (!biz || timeLimitReached) {
-                    if (!biz && !timeLimitReached) console.log(`[Maps] [Task ${taskNum}] Listing extraction returned no result.`);
-                    return;
+                // Navigate in the existing page
+                await Promise.race([
+                    page.goto(url, { timeout: 15000, waitUntil: 'domcontentloaded' }).catch(() => {}),
+                    new Promise(resolve => setTimeout(resolve, 15000))
+                ]);
+                
+                try {
+                    await page.locator('h1').first().waitFor({ state: 'attached', timeout: 5000 });
+                } catch (err) {
+                    console.log(`[Maps] [Task ${taskNum}] Title not found or timed out. Skipping.`);
+                    continue;
                 }
 
-                console.log(`[Maps] [Task ${taskNum}] Found business: ${biz.name}. Checking for website/email...`);
+                const rawName = await page.locator('h1').first().textContent() || '';
+                const name = cleanBusinessName(rawName);
+
+                // Phone
+                let phone: string | null = null;
+                try {
+                    const phoneBtn = page.locator('button[data-item-id*="phone:"]');
+                    if (await phoneBtn.count() > 0) {
+                        const aria = await phoneBtn.first().getAttribute('aria-label');
+                        if (aria) phone = aria.replace('Phone:', '').replace(/\D/g, '').slice(-10);
+                    }
+                } catch { }
+
+                // Website
+                let website: string | null = null;
+                try {
+                    const webBtn = page.locator('a[data-item-id="authority"]');
+                    if (await webBtn.count() > 0) website = await webBtn.first().getAttribute('href');
+                } catch { }
+
+                // Address
+                let address = 'Address not found';
+                try {
+                    const addrBtn = page.locator('button[data-item-id="address"]');
+                    if (await addrBtn.count() > 0) {
+                        const aria = await addrBtn.first().getAttribute('aria-label');
+                        if (aria) address = aria.replace('Address:', '').trim();
+                    }
+                } catch { }
+
+                const biz: BusinessResult = {
+                    name,
+                    address,
+                    phone: phone || undefined,
+                    website: website || undefined,
+                    email: null,
+                    place_id: 'scraped_' + name.replace(/\s/g, '_'),
+                    types: []
+                };
+
+                console.log(`[Maps] [Task ${taskNum}] Extracted business: ${biz.name}. Checking for website/email...`);
 
                 if (biz.website) {
-                    const emailRes = await scrapeEmail(context, biz.website, biz.name, keyword).catch(err => {
-                        console.error(`[Maps] [Task ${taskNum}] Email scraping error: ${err.message}`);
+                    const emailRes = await Promise.race([
+                        scrapeEmail(context, biz.website, biz.name, keyword),
+                        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Email timeout')), 15000))
+                    ]).catch(err => {
+                        console.log(`[Maps] [Task ${taskNum}] Email scraping error: ${err.message}`);
                         return null;
                     });
 
                     if (emailRes === 'REJECT_EXPIRED' || emailRes === 'REJECT_UNWANTED') {
                         console.log(`[Maps] [Task ${taskNum}] Discarding ${biz.name}: ${emailRes}`);
-                        return;
+                        continue;
                     }
                     biz.email = emailRes;
                 }
@@ -617,28 +650,15 @@ export async function searchBusinesses(keyword: string, location: string, radius
                     console.log(`[Maps] [Task ${taskNum}] SUCCESS! Found email for ${biz.name}. Total found: ${validCount}/${TARGET_VALID_LEADS}`);
                     if (validCount >= TARGET_VALID_LEADS) {
                         console.log(`[Maps] Reached ${TARGET_VALID_LEADS} valid leads. Done.`);
+                        break;
                     }
                 } else if (!biz.email) {
                     console.log(`[Maps] [Task ${taskNum}] No email found for ${biz.name}. Skipping.`);
                 }
             } catch (err: any) {
-                console.error(`[Maps] [Task ${taskNum}] Fatal error in task: ${err.message}`);
-            } finally {
-                clearTimeout(timeoutId!);
+                console.error(`[Maps] [Task ${taskNum}] Fatal error: ${err.message}`);
             }
-        }));
-
-        await Promise.race([
-            Promise.allSettled(tasks),
-            new Promise<void>(resolve => {
-                const interval = setInterval(() => {
-                    if (timeLimitReached) {
-                        clearInterval(interval);
-                        resolve();
-                    }
-                }, 500);
-            })
-        ]);
+        }
 
         console.log(`[Maps] All tasks finished or timed out. Total processed: ${processedCount}. Returning ${results.length} valid leads.`);
         return results;
