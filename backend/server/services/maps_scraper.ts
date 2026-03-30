@@ -18,6 +18,14 @@ export interface BusinessResult {
 const TARGET_VALID_LEADS = 25; // 25 total candidates to ensure 10 NEW ones
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
+const BUSINESS_BLACKLIST = [
+    'MAKE VISION ANALYTICS',
+    'Krishnagiri Software Services',
+    'KN Global Services',
+    'CSC Computer Education',
+    'GP SYSTEM SOLUTION'
+];
+
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 function cleanBusinessName(name: string): string {
@@ -140,6 +148,16 @@ export async function searchBusinesses(keyword: string, location: string, radius
         // 2. Stage 2: Parallel Email Scavenging
         const emailPromises = candidates_raw.map(async (place: any) => {
             const name = cleanBusinessName(place.title || '');
+            
+            // ⭐ STRICT BLACKLIST FILTER
+            const isBlacklisted = BUSINESS_BLACKLIST.some(term => 
+                name.toLowerCase().includes(term.toLowerCase())
+            );
+            if (isBlacklisted) {
+                console.log(`[Filter] Strictly avoiding blacklisted lead: "${name}"`);
+                return null;
+            }
+
             const website = place.website;
             const address = place.address || 'Address not found';
             const phone = place.phoneNumber ? place.phoneNumber.replace(/\D/g, '').slice(-10) : undefined;
