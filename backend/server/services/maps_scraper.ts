@@ -16,6 +16,7 @@ export interface BusinessResult {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const TARGET_VALID_LEADS = 10;
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -50,38 +51,64 @@ export async function searchBusinesses(keyword: string, location: string, radius
     }
 
     const client = new ApifyClient({ token: APIFY_TOKEN });
-    const searchString = `${keyword} in ${location}`;
-    console.log(`[Apify] Starting Google Maps extraction for: "${searchString}"`);
+    
+    // 1. Generate Multiple Related Keywords to fill the 10-lead quota in small cities
+    const baseKeyword = keyword.toLowerCase();
+    const searchStrings: string[] = [
+        `${keyword} in ${location}`
+    ];
+    
+    // Auto-expand for common niches if it seems thin (optional: just hardcode 3 variations)
+    if (baseKeyword.includes('software') || baseKeyword.includes('it') || baseKeyword.includes('tech')) {
+        searchStrings.push(`Web development agencies in ${location}`);
+        searchStrings.push(`IT solutions in ${location}`);
+    } else if (baseKeyword.includes('marketing') || baseKeyword.includes('service')) {
+        searchStrings.push(`Digital marketing agency in ${location}`);
+        searchStrings.push(`Ad agencies in ${location}`);
+    } else {
+        // generic fallback expansions
+        searchStrings.push(`Professional services in ${location}`);
+    }
 
-    let results: BusinessResult[] = [];
+    console.log(`[Apify] Starting Multi-Keyword Google Maps extraction for: ${searchStrings.join(', ')}`);
+
+    let finalResults: BusinessResult[] = [];
     
     try {
-        // 1. Run the Google Maps Extractor actor
+        // 2. Run the Google Maps Extractor actor for ALL keywords
         const mapRun = await client.actor("compass/crawler-google-places").call({
-            searchStringsArray: [searchString],
-            maxCrawledPlacesPerSearch: 80, // Fetch plenty since many lack emails
+            searchStringsArray: searchStrings,
+            maxCrawledPlacesPerSearch: 40, // 40 each * 3 keywords = 120 total candidates
             language: "en",
         });
 
-        console.log(`[Apify] Run ${mapRun.id} finished. Fetching map results...`);
+        console.log(`[Apify] Map run ${mapRun.id} finished. Fetching results...`);
         const { items } = await client.dataset(mapRun.defaultDatasetId).listItems();
 
         if (!items || items.length === 0) {
-            console.log(`[Apify] No listings found for "${searchString}".`);
-            return results;
+            console.log(`[Apify] No listings found.`);
+            return finalResults;
         }
 
-        console.log(`[Apify] Found ${items.length} candidate businesses. Filtering for websites...`);
+        console.log(`[Apify] Found ${items.length} candidate listings. Filtering and deduplicating...`);
         
         let candidateBizs: BusinessResult[] = [];
+        const seenWebsites = new Set<string>();
+
         for (const item of items as any[]) {
             const name = cleanBusinessName(item.title || '');
-            if (!name) continue;
+            const website = item.website || undefined;
+            if (!name || !website) continue;
+            
+            // Deduplicate based on simple domain
+            try {
+                const domain = new URL(website).hostname.replace('www.', '').toLowerCase();
+                if (seenWebsites.has(domain)) continue;
+                seenWebsites.add(domain);
+            } catch { continue; }
+
             let phone = item.phone || item.phoneUnformatted || undefined;
             if (phone) phone = phone.replace(/\D/g, '').slice(-10);
-            
-            const website = item.website || undefined;
-            if (!website) continue; // Must have website to scrape email!
 
             candidateBizs.push({
                 name,
@@ -94,75 +121,68 @@ export async function searchBusinesses(keyword: string, location: string, radius
             });
         }
         
-        // Take an upper bound of 40 quality candidates to send to contact scraper
+        // Cap at 40 quality candidates for the detailed email crawl
         candidateBizs = candidateBizs.slice(0, 40);
 
         if (candidateBizs.length === 0) {
-             console.log(`[Apify] None of the returned map results had a website. Returning 0 fully qualified leads.`);
+             console.log(`[Apify] No unique websites found to scrape. Returning zero leads.`);
              return [];
         }
 
-        console.log(`[Apify] Handing off ${candidateBizs.length} websites to vdrmota/contact-info-scraper...`);
+        console.log(`[Apify] Handing off ${candidateBizs.length} unique websites to vdrmota/contact-info-scraper...`);
         
-        const startUrls = candidateBizs.map(b => ({ url: b.website }));
-        
-        // 2. Chained Execution: Contact Info Scraper
+        // 3. Chained Execution: Contact Info Scraper
         const contactRun = await client.actor("vdrmota/contact-info-scraper").call({
-            startUrls,
-            maxCrawlDepth: 1, // Look at the start page and immediate subpages
-            maxCrawlPages: 120, // max global pages (40 urls * 3 pages)
+            startUrls: candidateBizs.map(b => ({ url: b.website })),
+            maxCrawlDepth: 1, 
+            maxCrawlPages: 120, 
             stayWithinDomain: true,
             extractFromText: true,
             proxySettings: { useApifyProxy: true }
         });
 
-        console.log(`[Apify] Contact extraction run ${contactRun.id} finished. Parsing extracted emails...`);
-        const contactData = await client.dataset(contactRun.defaultDatasetId).listItems();
+        console.log(`[Apify] Contact extraction run ${contactRun.id} finished. Mapping emails back...`);
+        const { items: contactItems } = await client.dataset(contactRun.defaultDatasetId).listItems();
         
-        // 3. Map extracted emails back to their parent domains
         const domainToEmails = new Map<string, string>();
-        for (const record of contactData.items as any[]) {
+        for (const record of contactItems as any[]) {
              const emails = record.emails || [];
              if (emails.length > 0) {
                  try {
-                     // Try multiple possible fields for the domain/URL
                      let domain = record.domain;
                      const possibleUrl = record.url || record.startUrl || (record.scrapedUrls && record.scrapedUrls[0]);
                      
                      if (!domain && possibleUrl) {
-                         const urlObj = new URL(possibleUrl);
-                         domain = urlObj.hostname.replace('www.', '').toLowerCase();
+                         domain = new URL(possibleUrl).hostname.replace('www.', '').toLowerCase();
                      } else if (domain) {
                          domain = domain.replace('www.', '').toLowerCase();
                      }
 
                      if (!domain) continue;
 
-                     // Find the first valid email (handle both plain strings and { value: "x@x.com" } objects)
-                     let extractedEmail = null;
+                     // Find first email matching our professional REGEX
+                     let validEmail = null;
                      for (const e of emails) {
                          const emailStr = typeof e === 'string' ? e : (e.value || e.email || '');
-                         if (emailStr && typeof emailStr === 'string' && emailStr.includes('@') && !emailStr.includes('.png') && !emailStr.includes('.jpg')) {
-                             extractedEmail = emailStr;
+                         if (emailStr && EMAIL_REGEX.test(emailStr)) {
+                             validEmail = emailStr;
                              break;
                          }
                      }
                      
-                     if (extractedEmail) {
-                         domainToEmails.set(domain, extractedEmail);
+                     if (validEmail) {
+                         domainToEmails.set(domain, validEmail);
                      }
-                 } catch (err) {
-                     console.error(`[Apify] Mapping error for record:`, JSON.stringify(record).slice(0, 200));
-                 }
+                 } catch {}
              }
         }
         
-        console.log(`[Apify] Mapped ${domainToEmails.size} unique domains from ${contactData.items.length} records.`);
+        console.log(`[Apify] Mapped ${domainToEmails.size} domains with valid emails using Regex Filter.`);
         
-        // 4. Build final results array capped at TARGET_VALID_LEADS
-        let validCount = 0;
+        // 4. Final Construction
+        let count = 0;
         for (const biz of candidateBizs) {
-            if (validCount >= TARGET_VALID_LEADS) break;
+            if (count >= TARGET_VALID_LEADS) break;
             
             try {
                 const bDomain = new URL(biz.website!).hostname.replace('www.', '').toLowerCase();
@@ -170,20 +190,17 @@ export async function searchBusinesses(keyword: string, location: string, radius
                 
                 if (matchedEmail) {
                     biz.email = matchedEmail;
-                    results.push(biz);
-                    validCount++;
-                    console.log(`[Apify] Chained SUCCESS! Found email for ${biz.name}: ${biz.email}`);
-                } else {
-                    console.log(`[Apify] Contact Actor no email found for ${biz.name}. Skipping.`);
+                    finalResults.push(biz);
+                    count++;
                 }
-            } catch { } // ignore URL parsing errors for bad websites
+            } catch {}
         }
 
-        console.log(`[Apify] Chain extraction complete. Returning ${results.length}/${TARGET_VALID_LEADS} fully qualified leads to dashboard.`);
-        return results;
+        console.log(`[Apify] Pipeline complete! Found ${finalResults.length}/${TARGET_VALID_LEADS} leads.`);
+        return finalResults;
 
     } catch (e: any) {
-        console.error(`[Apify] Fatal error calling Apify API:`, e?.message || e);
-        return results;
+        console.error(`[Apify] Fatal failure:`, e?.message || e);
+        return finalResults;
     }
 }
