@@ -123,11 +123,21 @@ export async function searchBusinesses(keyword: string, location: string, radius
         const domainToEmails = new Map<string, string>();
         for (const record of contactData.items as any[]) {
              const emails = record.emails || [];
-             if (emails.length > 0 && record.url) {
+             if (emails.length > 0) {
                  try {
-                     const urlObj = new URL(record.url);
-                     const domain = urlObj.hostname.replace('www.', '').toLowerCase();
+                     // Try multiple possible fields for the domain/URL
+                     let domain = record.domain;
+                     const possibleUrl = record.url || record.startUrl || (record.scrapedUrls && record.scrapedUrls[0]);
                      
+                     if (!domain && possibleUrl) {
+                         const urlObj = new URL(possibleUrl);
+                         domain = urlObj.hostname.replace('www.', '').toLowerCase();
+                     } else if (domain) {
+                         domain = domain.replace('www.', '').toLowerCase();
+                     }
+
+                     if (!domain) continue;
+
                      // Find the first valid email (handle both plain strings and { value: "x@x.com" } objects)
                      let extractedEmail = null;
                      for (const e of emails) {
@@ -142,12 +152,12 @@ export async function searchBusinesses(keyword: string, location: string, radius
                          domainToEmails.set(domain, extractedEmail);
                      }
                  } catch (err) {
-                     console.error(`[Apify] Error parsing email for ${record.url}:`, err);
+                     console.error(`[Apify] Mapping error for record:`, JSON.stringify(record).slice(0, 200));
                  }
              }
         }
         
-        console.log(`[Apify] Mapped ${domainToEmails.size} unique domains with valid emails.`);
+        console.log(`[Apify] Mapped ${domainToEmails.size} unique domains from ${contactData.items.length} records.`);
         
         // 4. Build final results array capped at TARGET_VALID_LEADS
         let validCount = 0;
