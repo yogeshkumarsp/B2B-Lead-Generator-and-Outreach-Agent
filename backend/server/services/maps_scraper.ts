@@ -466,12 +466,12 @@ async function scrapeListing(
 
 export async function searchBusinesses(keyword: string, location: string, radius = '60'): Promise<BusinessResult[]> {
     const startTime = Date.now();
-    const GLOBAL_TIMEOUT_MS = 85000; // 85 seconds to allow safe shutdown within 90s
+    const GLOBAL_TIMEOUT_MS = 300000; // 5 minutes to allow slow Free-Tier Render CPUs to sequentially process tabs without crashing
     let timeLimitReached = false;
     
     const globalTimer = setTimeout(() => {
         timeLimitReached = true;
-        console.log('[Maps] === 90 SECOND GLOBAL TIME LIMIT REACHED ===');
+        console.log('[Maps] === 5 MINUTE GLOBAL TIME LIMIT REACHED ===');
     }, GLOBAL_TIMEOUT_MS);
 
     const radiusKm = parseFloat(radius) || 60;
@@ -575,12 +575,12 @@ export async function searchBusinesses(keyword: string, location: string, radius
             try {
                 // Navigate in the existing page
                 await Promise.race([
-                    page.goto(url, { timeout: 15000, waitUntil: 'domcontentloaded' }).catch(() => {}),
-                    new Promise(resolve => setTimeout(resolve, 15000))
+                    page.goto(url, { timeout: 25000, waitUntil: 'domcontentloaded' }).catch(() => {}),
+                    new Promise(resolve => setTimeout(resolve, 25000))
                 ]);
                 
                 try {
-                    await page.locator('h1').first().waitFor({ state: 'attached', timeout: 5000 });
+                    await page.locator('h1').first().waitFor({ state: 'attached', timeout: 10000 });
                 } catch (err) {
                     console.log(`[Maps] [Task ${taskNum}] Title not found or timed out. Skipping.`);
                     continue;
