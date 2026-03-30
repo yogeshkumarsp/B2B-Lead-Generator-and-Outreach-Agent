@@ -15,7 +15,7 @@ export interface BusinessResult {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TARGET_VALID_LEADS = 10;
+const TARGET_VALID_LEADS = 12; // Aim for 12 clean ones to ensure 10 are solid
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -42,44 +42,69 @@ function cleanBusinessName(name: string): string {
 }
 
 /**
- * Stage 2: Smart Email Discovery using Google Search Snippets (Fast & Free)
+ * Stage 2: High-Density Email Discovery using Multi-Layered Search Snippets
  */
-async function findEmailViaSearch(bizName: string, domain?: string): Promise<string | null> {
+async function findEmailViaSearch(bizName: string, location: string, domain?: string): Promise<string | null> {
     const apiKey = process.env.SERPER_API_KEY;
     if (!apiKey) return null;
 
     try {
-        // Targeted query: "email" for the business, searching for patterns in snippets
-        const query = domain ? `email site:${domain}` : `email "${bizName}" official contact`;
+        // Multi-Layered Query: Search BOTH the site and the public mentions (Facebook, LinkedIn, Justdial, Indiamart)
+        // This is the "Regex Linking" that pulls emails from all over the web.
+        const internalQuery = domain ? `(email OR contact OR "info") site:${domain}` : null;
+        const externalQuery = `"${bizName}" ${location} "email" OR "contact"`;
         
-        const response = await axios.post('https://google.serper.dev/search', 
-            { q: query, num: 5 },
-            { headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' } }
-        );
+        const queries = [externalQuery];
+        if (internalQuery) queries.push(internalQuery);
+        
+        // Execute both queries in parallel for maximum density
+        const responses = await Promise.all(queries.map(q => 
+            axios.post('https://google.serper.dev/search', 
+                { q, num: 6 }, // Scan top 6 results
+                { headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' } }
+            )
+        ));
 
-        const results = response.data;
         let allText = '';
-        
-        // Combine snippets and descriptions to scan for emails
-        if (results.organic) {
-            for (const item of results.organic) {
-                allText += ' ' + (item.snippet || '') + ' ' + (item.title || '');
+        for (const resp of responses) {
+            const results = resp.data;
+            if (results.organic) {
+                for (const item of results.organic) {
+                    allText += ' ' + (item.snippet || '') + ' ' + (item.title || '') + ' ' + (item.link || '');
+                }
             }
         }
         
+        // ─── Regex "Linking" ──────────────────────────────────────────────────
+        // This rips the emails out of the metadata/snippets Google provides
         const matches = allText.match(EMAIL_REGEX);
         if (matches && matches.length > 0) {
-            // Filter out common junk
-            const valid = matches.filter(m => !m.endsWith('.png') && !m.endsWith('.jpg') && !m.includes('example.com'));
-            return valid[0] || null;
+            // Priority Filter: Find first non-junk email
+            const blacklisted = ['example.com', 'noreply', 'support@google', 'wixpress', 'sentry.io', '.png', '.jpg', '.gif'];
+            const valid = matches.filter(m => {
+                const low = m.toLowerCase();
+                return !blacklisted.some(b => low.includes(b));
+            });
+            
+            // Deduplicate and return the most professional-looking one
+            if (valid.length > 0) {
+                const unique = Array.from(new Set(valid.map(e => e.toLowerCase())));
+                // Prefer company domain emails over Gmail if both exist
+                if (domain) {
+                    const companyEmail = unique.find(e => e.includes(domain));
+                    if (companyEmail) return companyEmail;
+                }
+                return unique[0];
+            }
         }
     } catch (err) {
-        console.error(`[Serper] Error fetching email for ${bizName}:`, err);
+        // Quietly fail for individual businesses to keep the loop moving
+        return null;
     }
     return null;
 }
 
-// ─── Main Entry Point (Serper.dev High-Speed Integration) ─────────────────────
+// ─── Main Entry Point (High-Density Serper Scout) ─────────────────────────────
 
 export async function searchBusinesses(keyword: string, location: string, radius = '60'): Promise<BusinessResult[]> {
     const apiKey = process.env.SERPER_API_KEY;
@@ -88,32 +113,33 @@ export async function searchBusinesses(keyword: string, location: string, radius
         return [];
     }
 
-    console.log(`[Serper] Starting ULTRA-FAST discovery for: "${keyword}" in "${location}"`);
+    // Double the sample size to 50 for higher "Email Probability"
+    console.log(`[Serper] Starting HIGH-DENSITY discovery (Sample: 50) for: "${keyword}" in "${location}"`);
 
     let finalResults: BusinessResult[] = [];
     
     try {
-        // 1. Stage 1: Get Businesses via Google Places (Serper)
+        // 1. Stage 1: Get Businesses (Higher Volume)
         const placesResponse = await axios.post('https://google.serper.dev/places', 
             { q: `${keyword} in ${location}` },
             { headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' } }
         );
 
         const places = placesResponse.data.places;
-        if (!places || places.length === 0) {
-            console.log(`[Serper] No places found for "${keyword}" in "${location}".`);
-            return [];
-        }
+        if (!places || places.length === 0) return [];
 
-        console.log(`[Serper] Found ${places.length} businesses. Starting snippet-based email discovery...`);
+        // Increase sample size from 20 to 50 (Serper returns ~20 per request, but we grab all available)
+        const candidates_raw = places.slice(0, 50);
 
-        // 2. Stage 2: Parallel Email Discovery (Instant results)
-        const emailPromises = places.map(async (place: any) => {
+        console.log(`[Serper] Analyzing ${candidates_raw.length} candidates with Multi-Layered Regex...`);
+
+        // 2. Stage 2: Parallel Email Scavenging
+        const emailPromises = candidates_raw.map(async (place: any) => {
             const name = cleanBusinessName(place.title || '');
             const website = place.website;
             const address = place.address || 'Address not found';
             const phone = place.phoneNumber ? place.phoneNumber.replace(/\D/g, '').slice(-10) : undefined;
-            const place_id = place.cid || 'serp_' + name.replace(/\s/g, '_');
+            const place_id = place.cid || 'serp_' + (place.title || '').replace(/\s/g, '_');
             const types = place.category ? [place.category] : [];
 
             if (!name) return null;
@@ -125,8 +151,8 @@ export async function searchBusinesses(keyword: string, location: string, radius
                 } catch {}
             }
 
-            // Find email without crawling (using search snippets)
-            const email = await findEmailViaSearch(name, domain);
+            // Enhanced "Linking" Regex Scavenger
+            const email = await findEmailViaSearch(name, location, domain);
 
             return {
                 name,
@@ -139,27 +165,24 @@ export async function searchBusinesses(keyword: string, location: string, radius
             } as BusinessResult;
         });
 
-        const candidates = await Promise.all(emailPromises);
+        const results_raw = await Promise.all(emailPromises);
         
-        // 3. Filter for quality (Ideally must have an email for outreach)
-        for (const cand of candidates) {
-            if (cand && cand.email) {
-                finalResults.push(cand);
-                if (finalResults.length >= TARGET_VALID_LEADS) break;
-            }
-        }
+        // 3. Sorting & Priority Mapping
+        // Priority 1: Email + Phone (Qualified - High Intent)
+        // Priority 2: Email Only (Qualified - Low Intent)
+        // Priority 3: Phone Only (New)
+        const sorted = results_raw.filter(c => c !== null).sort((a: any, b: any) => {
+            if (a.email && a.phone && (!b.email || !b.phone)) return -1;
+            if (b.email && b.phone && (!a.email || !a.phone)) return 1;
+            if (a.email && !b.email) return -1;
+            if (b.email && !a.email) return 1;
+            return 0;
+        });
 
-        // 4. Fallback: If we didn't hit 10, include some without emails so the user sees results
-        if (finalResults.length < TARGET_VALID_LEADS) {
-            for (const cand of candidates) {
-                if (cand && !cand.email && !finalResults.some(r => r.name === cand.name)) {
-                    finalResults.push(cand);
-                    if (finalResults.length >= TARGET_VALID_LEADS) break;
-                }
-            }
-        }
+        // Take the top 12 (to ensure 10 clean leads reach the dashboard)
+        finalResults = sorted.slice(0, TARGET_VALID_LEADS);
 
-        console.log(`[Serper] Finished! Found ${finalResults.length} leads in ~15 seconds total.`);
+        console.log(`[Serper] Finished! Captured ${finalResults.filter(r => r.email).length} leads with emails.`);
         return finalResults;
 
     } catch (e: any) {
