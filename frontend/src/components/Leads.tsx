@@ -109,133 +109,93 @@ const Leads: React.FC = () => {
     store.addLog({
       level: LogLevel.INFO,
       module: LogModule.DISCOVERY,
-      message: `Starting discovery for "${niche}" in "${location}"`
+      message: `Starting discovery job for "${niche}" in "${location}"`
     });
 
     try {
-
-      const newLeadsRaw = await discoverLeadsAI(niche, location);
-
-      // Update dismissed IDs: remove any IDs that were just discovered so they show up again
-      const newlyDiscoveredIds = newLeadsRaw.map(l => l.id as string).filter(id => !!id);
-      const nextDismissed = new Set(dismissedIds);
-      let changed = false;
-      newlyDiscoveredIds.forEach(id => {
-        if (nextDismissed.has(id)) {
-          nextDismissed.delete(id);
-          changed = true;
-        }
+      // 1. Initiate Job
+      const initRes = await apiFetch('/api/leads/discover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ niche, location })
       });
+      
+      if (!initRes.ok) throw new Error('Failed to start discovery job');
+      const { jobId } = await initRes.json();
 
-      if (changed) {
-        setDismissedIds(nextDismissed);
-        localStorage.setItem('dismissedLeadIds', JSON.stringify(Array.from(nextDismissed)));
-      }
-
-      // 1. Identify qualified leads
-      const qualifiedLeads = newLeadsRaw.filter(l => l.intent === 'HIGH');
-
-      if (qualifiedLeads.length > 0) {
-        const campaignName = `${niche} - ${location}`;
-
+      // 2. Poll Status
+      const pollInterval = setInterval(async () => {
         try {
-          // 2. Generate customized 5-step sequence for this niche
-          let activeSequence = await generateNicheSequence(niche, location);
-
-          if (!activeSequence || activeSequence.length === 0) {
-            // Fallback to a generic but structurally correct 5-step sequence
-            activeSequence = [
-              {
-                step: 1, day_delay: 0, template_name: "intro",
-                subject: "Question about {Company Name}'s outreach automation",
-                body: `Hi,\n\nI came across {Company Name} while researching ${niche} in {City}. \n\nI’m the creator of an AI-powered lead generation tool, and I'm reaching out to see if your team is looking to automate your B2B outreach and prospect discovery.\n\nWould love to hear how you currently handle this and if our automation could help.\n\nBest regards,\nYogesh Kumar`
-              },
-              {
-                step: 2, day_delay: 2, template_name: "problem",
-                subject: `Automating lead discovery for ${niche}`,
-                body: "Hi,\n\nMany companies in your industry spend hours manually finding and scoring leads. \n\nWe built an AI platform that handles this discovery 24/7 so you can focus on closing deals.\n\nCurious to know — how does {Company Name} currently generate new B2B leads?\n\nBest regards,\nYogesh Kumar"
-              },
-              {
-                step: 3, day_delay: 4, template_name: "idea",
-                subject: "Our AI agent for {Company Name}",
-                body: "Hi,\n\nI’m developing an AI agent platform specifically for personalized B2B outreach.\n\nSince you’re at {Company Name}, I thought you'd be interested in seeing how we automate the entire top-of-funnel process.\n\nDo you think a tool like this could help your sales team?\n\nBest regards,\nYogesh Kumar"
-              },
-              {
-                step: 4, day_delay: 6, template_name: "local",
-                subject: `Connecting with ${niche} in {City}`,
-                body: `Hi,\n\nI’m currently connecting with a few businesses in {City} to show how our AI tools help automate B2B lead generation.\n\nI'd love to share how {Company Name} can find more clients automatically.\n\nBest regards,\nYogesh Kumar`
-              },
-              {
-                step: 5, day_delay: 8, template_name: "final",
-                subject: "Final follow-up: outreach automation",
-                body: `Hi,\n\nJust checking again — how does {Company Name} currently find new B2B clients? \n\nIf you're interested in automating your lead generation with AI, I'd love to chat.\n\nBest regards,\nYogesh Kumar`
-              }
-            ];
+          const statusRes = await apiFetch(`/api/leads/discover/status/${jobId}`);
+          if (!statusRes.ok) {
+            clearInterval(pollInterval);
+            setIsDiscovering(false);
+            return;
           }
+          
+          const job = await statusRes.json();
+          
+          if (job.status === 'COMPLETED') {
+            clearInterval(pollInterval);
+            setIsDiscovering(false);
+            setNiche('');
+            setLocation('');
+            
+            store.addLog({
+                level: LogLevel.ACTION,
+                module: LogModule.DISCOVERY,
+                message: `Discovery job completed! Found ${job.results.length} new potential leads.`
+            });
 
-          // 3. Create campaign with steps
-          const cRes = await apiFetch('/api/campaigns', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: campaignName,
-              description: `Automated 5-step sequence for ${niche} in ${location}`,
-              steps: activeSequence
-            })
-          });
-          const campaign = await cRes.json();
+            // 3. One more step: Zero-Click Automation Logic (moved to frontend for transparency)
+            // Identify high intent leads from the NEWly discovered results
+            const qualifiedLeads = job.results.filter((l: any) => l.intent === 'HIGH');
+            
+            if (qualifiedLeads.length > 0) {
+               const campaignName = `${niche} - ${location}`;
+               try {
+                 const sequence = await generateNicheSequence(niche, location);
+                 const cRes = await apiFetch('/api/campaigns', {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({
+                     name: campaignName,
+                     description: `Automated 5-step sequence for ${niche} in ${location}`,
+                     steps: sequence
+                   })
+                 });
+                 const campaign = await cRes.json();
+                 
+                 // Auto-assign
+                 await apiFetch(`/api/campaigns/${campaign.id}/auto-assign`, { method: 'POST' });
+                 
+                 store.addLog({
+                   level: LogLevel.ACTION,
+                   module: LogModule.CAMPAIGN,
+                   message: `Zero-Click Automation: Created 5-step campaign "${campaignName}" and assigned ${qualifiedLeads.length} leads.`
+                 });
+                 
+                 agent.forceProcess();
+               } catch (e) {
+                 console.error("Zero-click automation failed:", e);
+               }
+            }
 
-          // 4. Auto-assign leads
-          await apiFetch(`/api/campaigns/${campaign.id}/auto-assign`, { method: 'POST' });
-
-          store.addLog({
-            level: LogLevel.ACTION,
-            module: LogModule.CAMPAIGN,
-            message: `Zero-Click Automation: Created 5-step campaign "${campaignName}" and assigned ${qualifiedLeads.length} leads.`
-          });
-
-          // 5. Trigger agent immediately
-          agent.forceProcess();
+            // Refresh leads from the database
+            loadLeads();
+          } else if (job.status === 'FAILED') {
+            clearInterval(pollInterval);
+            setIsDiscovering(false);
+            alert(`Discovery failed: ${job.error || 'Unknown error'}`);
+          }
         } catch (err) {
-          console.error("Zero-Click automation failed:", err);
+          console.error("Polling error:", err);
         }
-      }
-
-      // Refresh leads from the database
-      const refreshRes = await apiFetch('/api/leads');
-      const lData = await refreshRes.json();
-      if (Array.isArray(lData)) {
-        const mapped = lData.map((d: any) => ({
-          ...d,
-          name: d.companyName,
-          company: d.companyName,
-          location: d.address,
-          searchLocation: d.searchLocation,
-          title: 'Decision Maker',
-          source: 'Postgres DB',
-          status: (d.status as LeadStatus) || LeadStatus.UNPROCESSED,
-          outreachStatus: (d.outreachStatus as OutreachStatus) || OutreachStatus.PENDING,
-          outreachMessage: d.outreachMessage,
-          followUpCount: d.followUpCount || 0,
-          intent: d.intent || 'LOW',
-          lastContactedAt: d.lastContactedAt ? new Date(d.lastContactedAt).getTime() : undefined
-        }));
-
-        // Filter out ONLY explicitly dismissed leads
-        setLeads(mapped.filter(l => !dismissedIds.has(l.id)));
-
-        // Refresh campaigns
-        const cRes = await apiFetch('/api/campaigns');
-        const campData = await cRes.json();
-        if (Array.isArray(campData)) setCampaigns(campData);
-      }
+      }, 3000); // Poll every 3 seconds
 
     } catch (err) {
       console.error("Discovery process failed:", err);
-    } finally {
       setIsDiscovering(false);
-      setNiche('');
-      setLocation('');
     }
   };
 
