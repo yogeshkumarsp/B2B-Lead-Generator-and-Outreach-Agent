@@ -18,9 +18,9 @@ export interface BusinessResult {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const TARGET_VALID_LEADS = 10;
-const MAX_LINKS = 15;
-const FETCH_TIMEOUT_MS = 15000;
-const PAGE_TIMEOUT_MS = 30000;
+const MAX_LINKS = 40;
+const FETCH_TIMEOUT_MS = 8000;
+const PAGE_TIMEOUT_MS = 15000;
 
 const FETCH_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -545,7 +545,7 @@ export async function searchBusinesses(keyword: string, location: string, radius
         let validCount = 0;
         let processedCount = 0;
 
-        const sem = new Semaphore(2); // Reduced to 2 for Render Free Tier stability (512MB RAM)
+        const sem = new Semaphore(4); // Increased concurrency for speed
         const tasks = linksToVisit.map((url, index) => sem.run(async () => {
             if (validCount >= TARGET_VALID_LEADS) return;
             
@@ -553,10 +553,10 @@ export async function searchBusinesses(keyword: string, location: string, radius
             console.log(`[Maps] [Task ${taskNum}/${linksToVisit.length}] Starting extraction for: ${url}`);
             
             try {
-                // Add a per-task timeout of 60s to prevent a single hanging site from blocking everything
+                // Aggressive 25s timeout to skip slow websites and process the pool faster
                 const biz = await Promise.race([
                     scrapeListing(context, url, centerLat, centerLng, radiusKm, location, keyword),
-                    new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 60000))
+                    new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 25000))
                 ]).catch(err => {
                     console.error(`[Maps] [Task ${taskNum}] Failed or timed out: ${err.message}`);
                     return null;
