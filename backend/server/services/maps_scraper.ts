@@ -15,7 +15,7 @@ export interface BusinessResult {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TARGET_VALID_LEADS = 12; // Aim for 12 clean ones to ensure 10 are solid
+const TARGET_VALID_LEADS = 25; // 25 total candidates to ensure 10 NEW ones
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -49,47 +49,34 @@ async function findEmailViaSearch(bizName: string, location: string, domain?: st
     if (!apiKey) return null;
 
     try {
-        // Multi-Layered Query: Search BOTH the site and the public mentions (Facebook, LinkedIn, Justdial, Indiamart)
-        // This is the "Regex Linking" that pulls emails from all over the web.
-        const internalQuery = domain ? `(email OR contact OR "info") site:${domain}` : null;
-        const externalQuery = `"${bizName}" ${location} "email" OR "contact"`;
+        // Combined Mega-Query to save credits while maintaining high hit rate
+        const combinedQuery = domain 
+            ? `(email OR contact OR "info") site:${domain} OR "${bizName}" ${location} email contact`
+            : `"${bizName}" ${location} official contact email`;
         
-        const queries = [externalQuery];
-        if (internalQuery) queries.push(internalQuery);
-        
-        // Execute both queries in parallel for maximum density
-        const responses = await Promise.all(queries.map(q => 
-            axios.post('https://google.serper.dev/search', 
-                { q, num: 6 }, // Scan top 6 results
-                { headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' } }
-            )
-        ));
+        const response = await axios.post('https://google.serper.dev/search', 
+            { q: combinedQuery, num: 8 }, 
+            { headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' } }
+        );
 
+        const results = response.data;
         let allText = '';
-        for (const resp of responses) {
-            const results = resp.data;
-            if (results.organic) {
-                for (const item of results.organic) {
-                    allText += ' ' + (item.snippet || '') + ' ' + (item.title || '') + ' ' + (item.link || '');
-                }
+        if (results.organic) {
+            for (const item of results.organic) {
+                allText += ' ' + (item.snippet || '') + ' ' + (item.title || '') + ' ' + (item.link || '');
             }
         }
         
-        // ─── Regex "Linking" ──────────────────────────────────────────────────
-        // This rips the emails out of the metadata/snippets Google provides
         const matches = allText.match(EMAIL_REGEX);
         if (matches && matches.length > 0) {
-            // Priority Filter: Find first non-junk email
             const blacklisted = ['example.com', 'noreply', 'support@google', 'wixpress', 'sentry.io', '.png', '.jpg', '.gif'];
             const valid = matches.filter(m => {
                 const low = m.toLowerCase();
                 return !blacklisted.some(b => low.includes(b));
             });
             
-            // Deduplicate and return the most professional-looking one
             if (valid.length > 0) {
                 const unique = Array.from(new Set(valid.map(e => e.toLowerCase())));
-                // Prefer company domain emails over Gmail if both exist
                 if (domain) {
                     const companyEmail = unique.find(e => e.includes(domain));
                     if (companyEmail) return companyEmail;
@@ -98,13 +85,12 @@ async function findEmailViaSearch(bizName: string, location: string, domain?: st
             }
         }
     } catch (err) {
-        // Quietly fail for individual businesses to keep the loop moving
         return null;
     }
     return null;
 }
 
-// ─── Main Entry Point (High-Density Serper Scout) ─────────────────────────────
+// ─── Main Entry Point (Keyword Expanded Serper Scout) ─────────────────────────
 
 export async function searchBusinesses(keyword: string, location: string, radius = '60'): Promise<BusinessResult[]> {
     const apiKey = process.env.SERPER_API_KEY;
@@ -113,25 +99,43 @@ export async function searchBusinesses(keyword: string, location: string, radius
         return [];
     }
 
-    // Double the sample size to 50 for higher "Email Probability"
-    console.log(`[Serper] Starting HIGH-DENSITY discovery (Sample: 50) for: "${keyword}" in "${location}"`);
+    // ⭐ KEYWORD EXPANSION: Build a bundle of 5 related terms to guarantee volume in small cities
+    const baseQuery = keyword.toLowerCase();
+    const relatedTerms: string[] = [`${keyword} in ${location}`];
+    
+    if (baseQuery.includes('software') || baseQuery.includes('it') || baseQuery.includes('tech')) {
+        relatedTerms.push(`Web Design agency in ${location}`, `App Development in ${location}`, `IT Services and Consulting in ${location}`, `Software Development in ${location}`);
+    } else if (baseQuery.includes('marketing') || baseQuery.includes('ad')) {
+        relatedTerms.push(`SEO agency in ${location}`, `Social Media Marketing in ${location}`, `Branding agency in ${location}`, `Advertising agency in ${location}`);
+    } else {
+        relatedTerms.push(`${keyword} services in ${location}`, `${keyword} company in ${location}`, `Top ${keyword} in ${location}`);
+    }
+
+    console.log(`[Serper] ⭐ EXPANDED SEARCH: Fetching from 5 keyword streams in "${location}"...`);
 
     let finalResults: BusinessResult[] = [];
     
     try {
-        // 1. Stage 1: Get Businesses (Higher Volume)
-        const placesResponse = await axios.post('https://google.serper.dev/places', 
-            { q: `${keyword} in ${location}` },
-            { headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' } }
+        // 1. Stage 1: Parallel Keyword Fetching
+        const placesPromises = relatedTerms.map(q => 
+            axios.post('https://google.serper.dev/places', 
+                { q }, 
+                { headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' } }
+            ).catch(() => ({ data: { places: [] }}))
         );
 
-        const places = placesResponse.data.places;
-        if (!places || places.length === 0) return [];
+        const placesResponses = await Promise.all(placesPromises);
+        const allPlaces = placesResponses.flatMap(r => r.data.places || []);
+        
+        // Deduplicate initial candidates by Phone or Name
+        const uniquePlacesMap = new Map<string, any>();
+        for (const p of allPlaces) {
+            const key = (p.phoneNumber || p.title || '').replace(/\D/g, '').toLowerCase();
+            if (key) uniquePlacesMap.set(key, p);
+        }
 
-        // Increase sample size from 20 to 50 (Serper returns ~20 per request, but we grab all available)
-        const candidates_raw = places.slice(0, 50);
-
-        console.log(`[Serper] Analyzing ${candidates_raw.length} candidates with Multi-Layered Regex...`);
+        const candidates_raw = Array.from(uniquePlacesMap.values()).slice(0, 50);
+        console.log(`[Serper] Found ${candidates_raw.length} unique candidates. Starting Scavenger...`);
 
         // 2. Stage 2: Parallel Email Scavenging
         const emailPromises = candidates_raw.map(async (place: any) => {
@@ -151,7 +155,6 @@ export async function searchBusinesses(keyword: string, location: string, radius
                 } catch {}
             }
 
-            // Enhanced "Linking" Regex Scavenger
             const email = await findEmailViaSearch(name, location, domain);
 
             return {
@@ -167,10 +170,7 @@ export async function searchBusinesses(keyword: string, location: string, radius
 
         const results_raw = await Promise.all(emailPromises);
         
-        // 3. Sorting & Priority Mapping
-        // Priority 1: Email + Phone (Qualified - High Intent)
-        // Priority 2: Email Only (Qualified - Low Intent)
-        // Priority 3: Phone Only (New)
+        // 3. Sorting: Prioritize complete leads (Email + Phone)
         const sorted = results_raw.filter(c => c !== null).sort((a: any, b: any) => {
             if (a.email && a.phone && (!b.email || !b.phone)) return -1;
             if (b.email && b.phone && (!a.email || !a.phone)) return 1;
@@ -179,10 +179,10 @@ export async function searchBusinesses(keyword: string, location: string, radius
             return 0;
         });
 
-        // Take the top 12 (to ensure 10 clean leads reach the dashboard)
+        // Increase target to ensure we have "leftover" leads for the dashboard
         finalResults = sorted.slice(0, TARGET_VALID_LEADS);
 
-        console.log(`[Serper] Finished! Captured ${finalResults.filter(r => r.email).length} leads with emails.`);
+        console.log(`[Serper] Pipeline complete! Captured ${finalResults.filter(r => r.email).length} high-quality leads.`);
         return finalResults;
 
     } catch (e: any) {
