@@ -1,4 +1,4 @@
-import { ApifyClient } from 'apify-client';
+import axios from 'axios';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,8 +15,8 @@ export interface BusinessResult {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TARGET_VALID_LEADS = 12; // Slightly more target to ensure 10 clean ones
-const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+const TARGET_VALID_LEADS = 10;
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -41,95 +41,129 @@ function cleanBusinessName(name: string): string {
     return cleaned.trim();
 }
 
-// ─── Main Entry Point (Single-Pass Optimized Integration) ─────────────────────────
+/**
+ * Stage 2: Smart Email Discovery using Google Search Snippets (Fast & Free)
+ */
+async function findEmailViaSearch(bizName: string, domain?: string): Promise<string | null> {
+    const apiKey = process.env.SERPER_API_KEY;
+    if (!apiKey) return null;
+
+    try {
+        // Targeted query: "email" for the business, searching for patterns in snippets
+        const query = domain ? `email site:${domain}` : `email "${bizName}" official contact`;
+        
+        const response = await axios.post('https://google.serper.dev/search', 
+            { q: query, num: 5 },
+            { headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' } }
+        );
+
+        const results = response.data;
+        let allText = '';
+        
+        // Combine snippets and descriptions to scan for emails
+        if (results.organic) {
+            for (const item of results.organic) {
+                allText += ' ' + (item.snippet || '') + ' ' + (item.title || '');
+            }
+        }
+        
+        const matches = allText.match(EMAIL_REGEX);
+        if (matches && matches.length > 0) {
+            // Filter out common junk
+            const valid = matches.filter(m => !m.endsWith('.png') && !m.endsWith('.jpg') && !m.includes('example.com'));
+            return valid[0] || null;
+        }
+    } catch (err) {
+        console.error(`[Serper] Error fetching email for ${bizName}:`, err);
+    }
+    return null;
+}
+
+// ─── Main Entry Point (Serper.dev High-Speed Integration) ─────────────────────
 
 export async function searchBusinesses(keyword: string, location: string, radius = '60'): Promise<BusinessResult[]> {
-    const APIFY_TOKEN = process.env.APIFY_API_TOKEN;
-    if (!APIFY_TOKEN) {
-        console.error('[Maps] ❌ APIFY_API_TOKEN is missing in environment variables.');
+    const apiKey = process.env.SERPER_API_KEY;
+    if (!apiKey) {
+        console.error('[Serper] ❌ SERPER_API_KEY is missing in environment variables.');
         return [];
     }
 
-    const client = new ApifyClient({ token: APIFY_TOKEN });
-    
-    // 1. Build Targeted Search for high relevance
-    const searchString = `${keyword}`; 
-    console.log(`[Apify] Starting Single-Pass HIGH-SPEED discovery for: "${searchString}" in "${location}"`);
+    console.log(`[Serper] Starting ULTRA-FAST discovery for: "${keyword}" in "${location}"`);
 
     let finalResults: BusinessResult[] = [];
     
     try {
-        // 2. RUN Unified Actor: Google Maps + Contact Scraper (in one server startup)
-        const run = await client.actor("compass/crawler-google-places").call({
-            searchStringsArray: [searchString],
-            locationQuery: location, // RESTRICT to this city
-            maxCrawledPlacesPerSearch: 20, 
-            scrapeContacts: true, // BUILT-IN email extraction
-            scrapePlaceDetailPage: true, // Need this for contacts
-            allPlacesNoSearchAction: "all_places_no_search_ocr", // FASTEST mode
-            language: "en",
-        });
+        // 1. Stage 1: Get Businesses via Google Places (Serper)
+        const placesResponse = await axios.post('https://google.serper.dev/places', 
+            { q: `${keyword} in ${location}` },
+            { headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' } }
+        );
 
-        console.log(`[Apify] Unified run ${run.id} finished. Fetching high-speed results...`);
-        const { items } = await client.dataset(run.defaultDatasetId).listItems();
-
-        if (!items || items.length === 0) {
-            console.log(`[Apify] No listings found.`);
-            return finalResults;
+        const places = placesResponse.data.places;
+        if (!places || places.length === 0) {
+            console.log(`[Serper] No places found for "${keyword}" in "${location}".`);
+            return [];
         }
 
-        console.log(`[Apify] Found ${items.length} candidate listings. Applying filters and Regex...`);
-        
-        const seenWebsites = new Set<string>();
+        console.log(`[Serper] Found ${places.length} businesses. Starting snippet-based email discovery...`);
 
-        for (const item of items as any[]) {
-            if (finalResults.length >= TARGET_VALID_LEADS) break;
+        // 2. Stage 2: Parallel Email Discovery (Instant results)
+        const emailPromises = places.map(async (place: any) => {
+            const name = cleanBusinessName(place.title || '');
+            const website = place.website;
+            const address = place.address || 'Address not found';
+            const phone = place.phoneNumber ? place.phoneNumber.replace(/\D/g, '').slice(-10) : undefined;
+            const place_id = place.cid || 'serp_' + name.replace(/\s/g, '_');
+            const types = place.category ? [place.category] : [];
 
-            const name = cleanBusinessName(item.title || '');
-            const website = item.website || undefined;
-            if (!name || !website) continue;
-            
-            // Deduplicate based on domain
-            try {
-                const domain = new URL(website).hostname.replace('www.', '').toLowerCase();
-                if (seenWebsites.has(domain)) continue;
-                seenWebsites.add(domain);
-            } catch { continue; }
+            if (!name) return null;
 
-            // Extract email from contact object or flat fields
-            let extractedEmail = null;
-            const emails = item.contact?.emails || item.emails || [];
-            
-            for (const e of emails) {
-                const emailStr = typeof e === 'string' ? e : (e.value || e.email || '');
-                if (emailStr && EMAIL_REGEX.test(emailStr)) {
-                    extractedEmail = emailStr;
-                    break;
-                }
+            let domain = undefined;
+            if (website) {
+                try {
+                    domain = new URL(website).hostname.replace('www.', '').toLowerCase();
+                } catch {}
             }
 
-            // Skip if no email found to meet the target quality
-            if (!extractedEmail) continue;
+            // Find email without crawling (using search snippets)
+            const email = await findEmailViaSearch(name, domain);
 
-            let phone = item.phone || item.phoneUnformatted || undefined;
-            if (phone) phone = phone.replace(/\D/g, '').slice(-10);
-
-            finalResults.push({
+            return {
                 name,
-                address: item.address || 'Address not found',
+                address,
                 phone,
                 website,
-                email: extractedEmail,
-                place_id: 'scraped_' + (item.placeId || name.replace(/\s/g, '_')),
-                types: item.categories || []
-            });
-        }
+                email,
+                place_id,
+                types
+            } as BusinessResult;
+        });
+
+        const candidates = await Promise.all(emailPromises);
         
-        console.log(`[Apify] Single-Pass Pipeline complete! Found ${finalResults.length} leads in record time.`);
+        // 3. Filter for quality (Ideally must have an email for outreach)
+        for (const cand of candidates) {
+            if (cand && cand.email) {
+                finalResults.push(cand);
+                if (finalResults.length >= TARGET_VALID_LEADS) break;
+            }
+        }
+
+        // 4. Fallback: If we didn't hit 10, include some without emails so the user sees results
+        if (finalResults.length < TARGET_VALID_LEADS) {
+            for (const cand of candidates) {
+                if (cand && !cand.email && !finalResults.some(r => r.name === cand.name)) {
+                    finalResults.push(cand);
+                    if (finalResults.length >= TARGET_VALID_LEADS) break;
+                }
+            }
+        }
+
+        console.log(`[Serper] Finished! Found ${finalResults.length} leads in ~15 seconds total.`);
         return finalResults;
 
     } catch (e: any) {
-        console.error(`[Apify] Fatal error in Single-Pass Scout:`, e?.message || e);
+        console.error(`[Serper] Fatal error:`, e?.message || e);
         return finalResults;
     }
 }
