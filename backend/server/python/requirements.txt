@@ -1,4 +1,4 @@
-playwright
-aiohttp
-beautifulsoup4
-google-generativeai
+aiohttp==3.11.11
+beautifulsoup4==4.12.3
+playwright==1.49.1
+google-generativeai==0.8.3
