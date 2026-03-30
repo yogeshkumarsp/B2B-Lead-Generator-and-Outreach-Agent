@@ -306,7 +306,7 @@ export async function searchBusinesses(keyword: string, location: string, radius
     }
 
     const client = new ApifyClient({ token: APIFY_TOKEN });
-    const searchString = `${keyword} within 50km of ${location}`;
+    const searchString = `${keyword} in ${location}`;
     console.log(`[Apify] Starting Google Maps extraction for: "${searchString}"`);
 
     let results: BusinessResult[] = [];
@@ -317,7 +317,6 @@ export async function searchBusinesses(keyword: string, location: string, radius
             searchStringsArray: [searchString],
             maxCrawledPlacesPerSearch: 80, // Request roughly 80 to ensure our fast HTML-only scraper can easily find 10 valid emails
             language: "en",
-            zoom: 11 // zoom out to 11 to roughly cover a 50km radius in viewport
         });
 
         console.log(`[Apify] Run ${run.id} finished. Fetching results...`);
