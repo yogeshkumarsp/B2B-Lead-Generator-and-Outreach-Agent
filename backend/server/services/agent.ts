@@ -280,8 +280,8 @@ export class BackendAutoSDRAgent {
     private canSendOutreach(lead: any, campaign: any): boolean {
         if (lead.outreachStatus === 'REPLIED' || lead.outreachStatus === 'STOPPED') return false;
 
-        // Only send outreach to HIGH intent leads (comprehensive contact data)
-        if (lead.intent !== 'HIGH') return false;
+        // Only send outreach to QUALIFIED leads (must have valid contact info)
+        if (lead.status !== 'QUALIFIED') return false;
 
         if (lead.outreachStatus === 'PENDING' || !lead.lastContactedAt) return true;
 

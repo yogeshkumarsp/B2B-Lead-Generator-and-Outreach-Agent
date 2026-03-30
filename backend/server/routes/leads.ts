@@ -182,7 +182,10 @@ router.post('/discover', async (req: AuthRequest, res) => {
                 await Promise.all(uniqueTasks.map(async (business: any) => {
                     const hasPhone = !!business.phone;
                     const hasEmail = !!business.email;
-                    const intent = (hasPhone || hasEmail) ? 'HIGH' : 'LOW';
+                    
+                    // HIGH = both, LOW = only Email (both are qualified)
+                    const intent = (hasPhone && hasEmail) ? 'HIGH' : 'LOW';
+                    const status = hasEmail ? 'QUALIFIED' : 'NEW';
 
                     const normName = normalizeName(business.name);
                     const normAddr = normalizeName(business.address || "");
@@ -207,7 +210,7 @@ router.post('/discover', async (req: AuthRequest, res) => {
                                 website: business.website || '',
                                 address: business.address || location,
                                 intent,
-                                status: intent === 'HIGH' ? 'QUALIFIED' : 'NEW',
+                                status,
                                 searchNiche: nicheKey,
                                 searchLocation: locationKey
                             }
