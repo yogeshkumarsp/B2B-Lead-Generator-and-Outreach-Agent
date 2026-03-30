@@ -357,14 +357,14 @@ async function scrapeListing(
         }
 
         try { 
-            await page.waitForSelector('h1', { timeout: 15000 }); 
+            await page.locator('h1').first().waitFor({ state: 'attached', timeout: 15000 }); 
         } catch (err: any) { 
             console.log(`[Maps] ⚠️ waitForSelector('h1') failed after ${Date.now() - gotoStart}ms: ${err.message}`);
             await page.close(); 
             return null; 
         }
 
-        const rawName = await page.locator('h1').first().innerText();
+        const rawName = await page.locator('h1').first().textContent() || '';
         const name = cleanBusinessName(rawName);
 
         // Filter educational institutions
@@ -569,22 +569,26 @@ export async function searchBusinesses(keyword: string, location: string, radius
         let validCount = 0;
         let processedCount = 0;
 
-        const sem = new Semaphore(2); // Reduced concurrency to 2 to prevent CPU throttling on Render
+        const sem = new Semaphore(1); // Set concurrency to 1 so the microscopic Render CPU doesn't freeze
         const tasks = linksToVisit.map((url, index) => sem.run(async () => {
             if (validCount >= TARGET_VALID_LEADS || timeLimitReached) return;
             
             const taskNum = index + 1;
             console.log(`[Maps] [Task ${taskNum}/${linksToVisit.length}] Starting extraction for: ${url}`);
             
+            let timeoutId: NodeJS.Timeout;
             try {
-                // Aggressive 30s timeout to skip slow websites and process the pool faster
+                // Aggressive 25s timeout to skip slow websites and process the pool faster
                 const biz = await Promise.race([
                     scrapeListing(context, url, centerLat, centerLng, radiusKm, location, keyword),
-                    new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 30000))
+                    new Promise<null>((_, reject) => {
+                        timeoutId = setTimeout(() => reject(new Error('Timeout')), 25000);
+                    })
                 ]).catch(err => {
                     console.error(`[Maps] [Task ${taskNum}] Failed or timed out: ${err.message}`);
                     return null;
                 });
+                clearTimeout(timeoutId!);
 
                 processedCount++;
                 if (!biz || timeLimitReached) {
@@ -619,6 +623,8 @@ export async function searchBusinesses(keyword: string, location: string, radius
                 }
             } catch (err: any) {
                 console.error(`[Maps] [Task ${taskNum}] Fatal error in task: ${err.message}`);
+            } finally {
+                clearTimeout(timeoutId!);
             }
         }));
 
