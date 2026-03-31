@@ -70,22 +70,24 @@ export const executeWithRetry = async <T>(fn: (client: GoogleGenAI) => Promise<T
       const status = error?.status || error?.getHTTPStatus?.() || 0;
       const msg = error?.message?.toLowerCase() || "";
       
-      // If it's a quota error (429) and specifically "limit: 0" (daily limit), trigger global cool-down
-      if (status === 429 && (msg.includes('limit: 0') || msg.includes('quota exceeded'))) {
-          console.error(`[AI] GLOBAL QUOTA EXHAUSTED on key ${idx+1}. Entering cool-down for 2 minutes.`);
-          globalCoolDownUntil = Date.now() + (2 * 60 * 1000); // 2 minutes cool-down (usually per-minute limits)
-          throw new AICoolDownError(getAICoolDownRemaining());
-      }
-
+      // If it's a quota error (429), try the next key
       if (status === 429 || status === 403 || msg.includes('quota') || msg.includes('limit')) {
-        console.warn(`[AI] Key ${idx + 1}/${keys.length} failed with status ${status}. Rotating...`);
-        continue;
+        console.warn(`[AI] Key ${idx + 1}/${keys.length} rate limited. Rotating...`);
+        
+        // If it's specifically a DAILY limit, we should eventually enter cooldown after all keys fail
+        if (msg.includes('per day') || msg.includes('limit: 0')) {
+             console.error(`[AI] Key ${idx + 1} DAILY QUOTA EXHAUSTED.`);
+        }
+        continue; // Go to next key!
       }
-      throw error; // Rethrow if it's not a rate limit/quota error
+      throw error; // Rethrow if it's a real logic error
     }
   }
   
-  throw lastError || new Error('All API keys failed');
+  // If we get here, ALL keys failed. NOW we enter global cool-down.
+  console.error(`[AI] ALL ${keys.length} KEYS EXHAUSTED / RATE LIMITED. Entering global 2-minute cool-down.`);
+  globalCoolDownUntil = Date.now() + (2 * 60 * 1000); 
+  throw new AICoolDownError(getAICoolDownRemaining());
 };
 
 export const generatePersonalizedEmail = async (
