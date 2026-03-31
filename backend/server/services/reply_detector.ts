@@ -1,33 +1,27 @@
-import { ImapFlow } from 'imapflow';
+import { google } from 'googleapis';
 import { prisma } from '../db.js';
-import { simpleParser } from 'mailparser';
 import { analyzeReplySentiment, generateConversationalReply } from './ai.js';
 import { sendOutreachEmail } from './email.js';
 
+const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID || '';
+const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET || '';
+const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN || '';
+
 export class ReplyDetector {
-    private client: ImapFlow | null = null;
     private isRunning = false;
     private intervalId: NodeJS.Timeout | null = null;
+    private oauth2Client: any = null;
 
     constructor() {
-        const host = process.env.IMAP_HOST || process.env.SMTP_HOST?.replace('smtp', 'imap') || 'imap.ethereal.email';
-        const port = parseInt(process.env.IMAP_PORT || '993');
-        const user = process.env.SMTP_USER || 'bernadette.reilly46@ethereal.email';
-        const pass = process.env.SMTP_PASS || 'GZkR872B5wR9e1WbC3';
-
-        this.client = new ImapFlow({
-            host,
-            port,
-            secure: port === 993,
-            auth: {
-                user,
-                pass
-            },
-            tls: {
-                rejectUnauthorized: false
-            },
-            logger: false
-        });
+        if (GMAIL_CLIENT_ID && GMAIL_CLIENT_SECRET && GMAIL_REFRESH_TOKEN) {
+            this.oauth2Client = new google.auth.OAuth2(
+                GMAIL_CLIENT_ID,
+                GMAIL_CLIENT_SECRET
+            );
+            this.oauth2Client.setCredentials({
+                refresh_token: GMAIL_REFRESH_TOKEN
+            });
+        }
     }
 
     private async tryAcquireLock(): Promise<boolean> {
@@ -39,7 +33,7 @@ export class ReplyDetector {
             const now = new Date();
             if (lock) {
                 const diffMs = now.getTime() - new Date(lock.updatedAt).getTime();
-                if (diffMs < 5 * 60000) { // 5 minute lock for replies
+                if (diffMs < 5 * 60000) { // 5 minute lock
                     return false;
                 }
             }
@@ -58,133 +52,140 @@ export class ReplyDetector {
     async start() {
         if (this.isRunning) return;
         this.isRunning = true;
-        console.log('[ReplyDetector] Starting automated reply detection...');
+        console.log('[ReplyDetector] Starting Gmail API reply detection...');
 
-        // Initial check
-        await this.checkReplies();
+        if (!this.oauth2Client) {
+            console.warn('[ReplyDetector] GMAIL tokens missing. Detector will idle.');
+            return;
+        }
 
-        // Check every 30 minutes
+        // Check every 10 minutes (API friendly)
+        this.checkReplies();
         this.intervalId = setInterval(async () => {
             await this.checkReplies();
-        }, 30 * 60 * 1000);
+        }, 10 * 60 * 1000);
     }
 
     async stop() {
         if (this.intervalId) clearInterval(this.intervalId);
         this.isRunning = false;
-        if (this.client) await this.client.logout();
     }
 
     private async checkReplies() {
-        if (!this.client) return;
-        if (!(await this.tryAcquireLock())) {
-            console.log('[ReplyDetector] Another instance is already checking replies. Skipping.');
-            return;
-        }
+        if (!this.oauth2Client) return;
+        if (!(await this.tryAcquireLock())) return;
 
         try {
-            await this.client.connect();
-            let lock = await this.client.getMailboxLock('INBOX');
+            const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client });
             
-            // Update lock to show we are actively processing
-            await prisma.systemLock.update({
-                where: { id: 'REPLY_LOCK' },
-                data: { updatedAt: new Date() }
+            // Search for unread messages (is:unread)
+            const res = await gmail.users.messages.list({
+                userId: 'me',
+                q: 'is:unread',
+                maxResults: 20
             });
 
-            try {
-                // Search and fetch unread messages
-                const messages = this.client.fetch({ seen: false }, { envelope: true, source: true });
+            const messages = res.data.messages || [];
+            if (messages.length === 0) {
+                console.log('[ReplyDetector] No new unread replies found.');
+                return;
+            }
 
-                for await (let message of messages) {
-                    const fromEmail = message.envelope.from[0]?.address?.toLowerCase();
-                    if (!fromEmail) continue;
+            for (const msg of messages) {
+                const fullMsg = await gmail.users.messages.get({
+                    userId: 'me',
+                    id: msg.id!
+                });
 
-                    // Match against leads in DB
-                    const lead = await prisma.lead.findFirst({
-                        where: {
-                            email: { equals: fromEmail, mode: 'insensitive' },
-                            outreachStatus: { in: ['SENT', 'FOLLOWING_UP'] }
+                const headers = fullMsg.data.payload?.headers || [];
+                const fromHeader = headers.find(h => h.name?.toLowerCase() === 'from')?.value || '';
+                const subjectHeader = headers.find(h => h.name?.toLowerCase() === 'subject')?.value || '';
+                
+                // Extract clean email from "Name <email@domain.com>"
+                const fromMatch = fromHeader.match(/<(.+)>|(\S+@\S+)/);
+                const fromEmail = (fromMatch ? (fromMatch[1] || fromMatch[2]) : '').toLowerCase();
+
+                if (!fromEmail) continue;
+
+                // Match against leads in DB who are in "SENT" or "FOLLOWING_UP" status
+                const lead = await prisma.lead.findFirst({
+                    where: {
+                        email: { equals: fromEmail, mode: 'insensitive' },
+                        outreachStatus: { in: ['SENT', 'FOLLOWING_UP'] }
+                    }
+                });
+
+                if (lead) {
+                    console.log(`[ReplyDetector] Found reply from lead: ${lead.companyName} (${fromEmail})`);
+                    
+                    const snippet = fullMsg.data.snippet || "No text content found.";
+                    
+                    // Mark as Read immediately so we don't process it twice
+                    await gmail.users.messages.batchModify({
+                        userId: 'me',
+                        ids: [msg.id!],
+                        removeLabelIds: ['UNREAD']
+                    });
+
+                    // Analyze sentiment with AI
+                    const { sentiment, summary } = await analyzeReplySentiment(snippet);
+                    console.log(`[ReplyDetector] AI classified reply as ${sentiment}: ${summary}`);
+
+                    // Update lead status
+                    await prisma.lead.update({
+                        where: { id: lead.id },
+                        data: {
+                            outreachStatus: 'REPLIED',
+                            replyContent: snippet,
+                            replySentiment: sentiment,
+                            lastContactedAt: new Date()
                         }
                     });
 
-                    if (lead) {
-                        console.log(`[ReplyDetector] Found reply from lead: ${lead.companyName} (${fromEmail})`);
-
-                        // Parse the email body
-                        const parsed = await simpleParser(message.source);
-                        const replyText = parsed.text || "No text content found in reply.";
-
-                        // Analyze sentiment with AI
-                        const { sentiment, summary } = await analyzeReplySentiment(replyText);
-                        console.log(`[ReplyDetector] AI classified reply as ${sentiment}: ${summary}`);
-
-                        // Update lead status and store sentiment
-                        await (prisma.lead as any).update({
-                            where: { id: lead.id },
-                            data: {
-                                outreachStatus: 'REPLIED',
-                                replyContent: replyText,
-                                replySentiment: sentiment
-                            }
-                        });
-
-                        // Log the event with AI summary
-                        await prisma.agentLog.create({
-                            data: {
-                                userId: lead.userId,
-                                level: 'INFO',
-                                module: 'OUTREACH',
-                                message: `Lead "${lead.companyName}" replied (${sentiment}). AI Summary: ${summary}`,
-                                leadId: lead.id
-                            }
-                        });
-
-                        // Automatically Draft and Send AI Response
-                        const settings = await prisma.userSettings.findUnique({ where: { userId: lead.userId } });
-                        if (settings && sentiment !== 'OUT_OF_OFFICE') {
-                            try {
-                                console.log(`[ReplyDetector] Generating AI response for ${lead.companyName}...`);
-                                const { subject, body } = await generateConversationalReply(lead, replyText, sentiment, settings);
-                                
-                                const emailRes = await sendOutreachEmail(
-                                    fromEmail,
-                                    subject,
-                                    body,
-                                    settings.senderName || undefined,
-                                    settings.senderEmail || undefined
-                                );
-
-                                if (emailRes.success) {
-                                    await prisma.agentLog.create({
-                                        data: {
-                                            userId: lead.userId,
-                                            level: 'INFO',
-                                            module: 'OUTREACH',
-                                            message: `Autonomous AI Response sent to ${lead.companyName}. Subject: ${subject}`,
-                                            leadId: lead.id
-                                        }
-                                    });
-                                } else {
-                                    console.error('[ReplyDetector] Failed to send AI response:', emailRes.error);
-                                }
-                            } catch (error) {
-                                console.error('[ReplyDetector] Error generating or sending AI response', error);
-                            }
+                    // Log the event
+                    await prisma.agentLog.create({
+                        data: {
+                            userId: lead.userId,
+                            level: 'INFO',
+                            module: 'OUTREACH',
+                            message: `Lead "${lead.companyName}" replied (${sentiment}). AI Summary: ${summary}`,
+                            leadId: lead.id
                         }
+                    });
 
-                        // Mark email as read (SEEN)
-                        await this.client.messageFlagsAdd(message.uid, ['\\Seen']);
+                    // Automatically Draft and Send AI Follow-up response via SENDGRID
+                    const settings = await prisma.userSettings.findUnique({ where: { userId: lead.userId } });
+                    if (settings && sentiment !== 'OUT_OF_OFFICE' && sentiment !== 'NOT_INTERESTED') {
+                        try {
+                            const { subject, body } = await generateConversationalReply(lead, snippet, sentiment, settings);
+                            
+                            const emailRes = await sendOutreachEmail(
+                                fromEmail,
+                                subject,
+                                body,
+                                settings.senderName || undefined,
+                                settings.senderEmail || undefined
+                            );
+
+                            if (emailRes.success) {
+                                await prisma.agentLog.create({
+                                    data: {
+                                        userId: lead.userId,
+                                        level: 'INFO',
+                                        module: 'OUTREACH',
+                                        message: `Autonomous AI Response sent to ${lead.companyName}. Subject: ${subject}`,
+                                        leadId: lead.id
+                                    }
+                                });
+                            }
+                        } catch (error) {
+                            console.error('[ReplyDetector] Error generating or sending AI follow-up:', error);
+                        }
                     }
                 }
-            } finally {
-                lock.release();
             }
-
-            await this.client.logout();
-        } catch (err) {
-            console.error('[ReplyDetector] Error checking replies:', err);
-            try { await this.client.logout(); } catch (e) { }
+        } catch (err: any) {
+            console.error('[ReplyDetector] Error checking replies via Gmail API:', err.message);
         }
     }
 }
