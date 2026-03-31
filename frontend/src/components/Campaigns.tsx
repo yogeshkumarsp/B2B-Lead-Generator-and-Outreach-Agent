@@ -114,7 +114,18 @@ const Campaigns: React.FC = () => {
     try {
       await apiFetch('/api/campaigns', {
         method: 'POST',
-        body: JSON.stringify({ name: newName, description: newDesc })
+        body: JSON.stringify({
+          name: newName,
+          description: newDesc,
+          steps: [
+            {
+              step: 1,
+              dayDelay: 0,
+              subject: `Introduction from ${store.getSettings().senderName || 'AutoSDR'}`,
+              body: newTemplate
+            }
+          ]
+        })
       });
       await refreshData();
       setShowCreate(false);

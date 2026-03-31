@@ -231,9 +231,49 @@ export const generateNicheSequence = async (niche: string, location: string): Pr
     );
 
     const text = response.text?.replace(/```json|```/g, '') || "[]";
-    return JSON.parse(text);
+    const data = JSON.parse(text);
+    if (Array.isArray(data) && data.length > 0) {
+      return data;
+    }
+    throw new Error("Returned array was empty or invalid JSON structure.");
   } catch (error) {
     console.error("Sequence generation error:", error);
-    return [];
+    return [
+                {
+                    step: 1,
+                    dayDelay: 0,
+                    templateName: "Intro",
+                    subject: `Streamlining outreach for ${niche}`,
+                    body: `Hi {Name},\n\nI noticed {Company Name} is growing and wanted to see if you are actively looking to scale your lead generation in ${location}.\n\nWe build AI-powered outreach tools tailored for ${niche} that automate the discovery and engagement process, running 24/7 without manual effort.\n\nWould you be open to a quick chat to see how this could integrate with {Company Name}?\n\nBest,`
+                },
+                {
+                    step: 2,
+                    dayDelay: 2,
+                    templateName: "Value Prop",
+                    subject: `Re: Streamlining outreach for ${niche}`,
+                    body: `Hi again {Name},\n\nFollowing up on my previous note. Many ${niche} businesses spend far too much time manually hunting for contact details or juggling spreadsheets.\n\nOur platform handles both discovery and tailored sequences completely automatically.\n\nLet me know if you have 10 minutes next week to see a quick demo.\n\nCheers,`
+                },
+                {
+                    step: 3,
+                    dayDelay: 4,
+                    templateName: "Tech Focus",
+                    subject: `Quick question about {Company Name}`,
+                    body: `Hi {Name},\n\nJust wanted to quickly ask - what are you currently using to source B2B leads right now?\n\nOur system uses real-time web scraping and Gemini AI to guarantee high-intent contacts with validated emails.\n\nHappy to share some case studies if you're interested.`
+                },
+                {
+                    step: 4,
+                    dayDelay: 6,
+                    templateName: "Local Connect",
+                    subject: `Connecting in ${location}`,
+                    body: `Hi {Name},\n\nSince you are operating around ${location}, I thought it would be highly relevant to connect. We are specifically helping businesses in your sector improve their pipeline velocity.\n\nAre you the right person to speak with regarding sales operations at {Company Name}?`
+                },
+                {
+                    step: 5,
+                    dayDelay: 8,
+                    templateName: "Breakup",
+                    subject: `Closing the loop`,
+                    body: `Hi {Name},\n\nI haven't heard back, so I will assume automated lead generation isn't a priority for {Company Name} right now.\n\nI'll stop following up, but feel free to reach out whenever you're ready to put your SDR tasks on autopilot.\n\nBest regards,`
+                }
+            ];
   }
 };

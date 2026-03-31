@@ -10,8 +10,17 @@ const transporter = nodemailer.createTransport({
     },
     tls: {
         rejectUnauthorized: false
-    }
-});
+    },
+    // Force Node.js to use IPv4 instead of IPv6 to avoid ENETUNREACH if network lacks v6 route
+    // (See: https://nodemailer.com/smtp/#general-options)
+    // TypeScript might complain if family isn't on PoolOptions so we cast as any if needed, but standard socket options are usually supported
+    // Actually, setting `localAddress: '0.0.0.0'` also forces IPv4 but `family: 4` is cleaner.
+} as any);
+
+// Specifically override the custom internal options for Node 18+ to definitely use IPv4
+(transporter as any).options.host = process.env.SMTP_HOST || 'smtp.ethereal.email';
+(transporter as any).options.family = 4;
+
 
 // We can auto-generate ethereal accounts on startup if needed:
 // let testAccount = await nodemailer.createTestAccount();

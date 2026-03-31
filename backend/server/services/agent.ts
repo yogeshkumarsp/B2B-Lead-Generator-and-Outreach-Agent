@@ -144,8 +144,10 @@ export class BackendAutoSDRAgent {
             where: { userId }
         });
 
+        const mappedLeads = allLeads.map(l => ({ ...l, company: l.companyName }));
+
         // Leads are passed in full to maintain IDs, Emails, and Campaign assignments
-        await this.runCampaignOutreach(userId, allLeads, campaigns, settings);
+        await this.runCampaignOutreach(userId, mappedLeads, campaigns, settings);
     }
 
     private async runCampaignOutreach(userId: string, leads: any[], campaigns: any[], settings: any) {
@@ -250,8 +252,8 @@ export class BackendAutoSDRAgent {
                     currentlySent++;
                     if (recentLogs + currentlySent >= settings.hourlyThrottleLimit) break;
                     
-                    // Mandatory 2-second delay to protect API quota between sends
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    // Mandatory 6-second delay to protect API quota between sends
+                    await new Promise(resolve => setTimeout(resolve, 6000));
                 } catch (err: any) {
                     console.error(`[BackendAgent] Failed to process lead ${lead.id}:`, err);
                     await prisma.agentLog.create({
