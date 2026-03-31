@@ -265,7 +265,9 @@ router.post('/discover', async (req: AuthRequest, res) => {
                     }
                 }));
 
-                const finalLeads = Array.from(finalResultsMap.values()).filter(l => !l.pending);
+                const finalLeads = Array.from(finalResultsMap.values())
+                    .filter(l => !l.pending)
+                    .slice(0, 10); // Guarantee exactly 10 for the user per run
                 
                 // Trigger agent
                 backendAgent.forceProcessUser(userId).catch(e => console.error('[API] Agent trigger error:', e));
