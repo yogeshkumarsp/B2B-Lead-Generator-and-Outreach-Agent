@@ -213,7 +213,7 @@ router.post('/discover', async (req: AuthRequest, res) => {
                     
                     finalResultsMap.set(uniqueKey, { pending: true });
                     return true;
-                });
+                }).slice(0, 10); // ⚡ Stop the process here: Only pick the first 10 fresh leads
 
                 await Promise.all(uniqueTasks.map(async (business: any) => {
                     const hasPhone = !!business.phone;
