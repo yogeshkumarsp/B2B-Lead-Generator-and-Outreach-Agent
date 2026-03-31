@@ -30,7 +30,8 @@ const localSafetyFilter = (business: any, niche: string): boolean => {
     let globalBlacklist = [
         "restaurant", "cafe", "food", "grocery", "supermarket", "furniture",
         "clothing", "boutique", "salon", "temple", "church", "mosque", "residential", "apartment",
-        "school", "college", "university", "institute", "academy"
+        "school", "college", "university", "institute", "academy",
+        "placement", "recruitment", "consultancy", "job center", "hiring"
     ];
 
     // Remove blacklist items if specifically searching for them
@@ -87,7 +88,9 @@ REJECT:
 - Mass retail (Furniture, Clothing, General stores)
 - Food & Beverage (Restaurants, Cafes)
 ${!isBeautySearch ? '- Personal services (Salons, Gyms, Temples)' : '- Temples, Churches, Mosques'}
-${!isEducationSearch ? '- Education (Schools, Colleges)' : ''}
+${!isEducationSearch ? '- Education (Schools, Colleges, Training centers)' : ''}
+- HR & Recruitment (Placement agencies, Consultancies, Job portals)
+- Retail/Showrooms (Electronics, Hardware, Repair shops)
 
 ACCEPT:
 - Information Technology / Software / agencies

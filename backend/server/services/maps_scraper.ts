@@ -23,7 +23,13 @@ const BUSINESS_BLACKLIST = [
     'Krishnagiri Software Services',
     'KN Global Services',
     'CSC Computer Education',
-    'GP SYSTEM SOLUTION'
+    'GP SYSTEM SOLUTION',
+    'Academy',
+    'Education',
+    'Success Center',
+    'Job Hub',
+    'Consultancy',
+    'Placement'
 ];
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -112,7 +118,7 @@ export async function searchBusinesses(keyword: string, location: string, radius
     const relatedTerms: string[] = [`${keyword} in ${location}`];
     
     if (baseQuery.includes('software') || baseQuery.includes('it') || baseQuery.includes('tech')) {
-        relatedTerms.push(`Web Design agency in ${location}`, `App Development in ${location}`, `IT Services and Consulting in ${location}`, `Software Development in ${location}`);
+        relatedTerms.push(`Web Design agency in ${location}`, `App Development in ${location}`, `Custom Software Development in ${location}`, `SaaS Development in ${location}`);
     } else if (baseQuery.includes('marketing') || baseQuery.includes('ad')) {
         relatedTerms.push(`SEO agency in ${location}`, `Social Media Marketing in ${location}`, `Branding agency in ${location}`, `Advertising agency in ${location}`);
     } else {
