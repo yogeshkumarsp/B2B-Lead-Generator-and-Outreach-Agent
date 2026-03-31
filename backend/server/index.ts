@@ -1,3 +1,13 @@
+console.log('[SERVER] Initializing Boot sequence...');
+process.on('uncaughtException', (err) => {
+    console.error('[SERVER] FATAL CRASH (uncaught):', err);
+    process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('[SERVER] FATAL CRASH (rejection):', reason);
+    process.exit(1);
+});
+
 import './env';
 import path from 'path';
 import { fileURLToPath } from 'url';
