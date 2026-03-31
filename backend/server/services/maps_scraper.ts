@@ -18,19 +18,7 @@ export interface BusinessResult {
 const TARGET_VALID_LEADS = 60; // 60 total candidates to ensure 10 NEW ones
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
-const BUSINESS_BLACKLIST = [
-    'MAKE VISION ANALYTICS',
-    'Krishnagiri Software Services',
-    'KN Global Services',
-    'CSC Computer Education',
-    'GP SYSTEM SOLUTION',
-    'Academy',
-    'Education',
-    'Success Center',
-    'Job Hub',
-    'Consultancy',
-    'Placement'
-];
+const BUSINESS_BLACKLIST: string[] = []; // All restrictions removed for a "Fresh" experience
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
