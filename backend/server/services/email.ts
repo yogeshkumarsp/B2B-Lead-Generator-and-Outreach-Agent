@@ -1,61 +1,67 @@
 import axios from 'axios';
-import { prisma } from '../db.js';
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-// Default to onboarding if no sender email provided
-const SENDER_EMAIL = process.env.SENDER_EMAIL || 'onboarding@resend.dev';
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || '';
+const SENDGRID_SENDER_EMAIL = process.env.SENDGRID_SENDER_EMAIL || process.env.RESEND_API_KEY || ''; // Fallback for transition
 
-export async function sendOutreachEmail(
-    to: string,
-    subject: string,
-    body: string,
-    senderName?: string,
+export const sendOutreachEmail = async (
+    to: string, 
+    subject: string, 
+    body: string, 
+    fromName?: string, 
     fromEmail?: string
-): Promise<{ success: boolean; messageId?: string; error?: any }> {
+): Promise<{ success: boolean; error?: any }> => {
+    if (!SENDGRID_API_KEY) {
+        console.warn('[Email] Skipping send: SENDGRID_API_KEY not found in environment.');
+        return { success: false, error: 'No API Key' };
+    }
+
+    const sender = fromEmail || SENDGRID_SENDER_EMAIL;
+    if (!sender) {
+        console.warn('[Email] Skipping send: No sender email provided.');
+        return { success: false, error: 'No Sender Email' };
+    }
+
+    console.log(`[Email] Preparing to send via SendGrid to: ${to} from: ${sender}`);
+
     try {
-        console.log(`[Email] Preparing to send via Resend API to: ${to}`);
-
-        if (!RESEND_API_KEY) {
-            const errorMsg = 'RESEND_API_KEY is not configured. Email will not be sent.';
-            console.error(`[Email] ${errorMsg}`);
-            return { success: false, error: errorMsg };
-        }
-
-        const from = senderName 
-            ? `${senderName} <${fromEmail || SENDER_EMAIL}>`
-            : fromEmail || SENDER_EMAIL;
-
-        const response = await axios.post('https://api.resend.com/emails', {
-            from,
-            to: [to],
-            subject,
-            html: body.replace(/\n/g, '<br/>') // Basic text to HTML conversion
+        const response = await axios.post('https://api.sendgrid.com/v3/mail/send', {
+            personalizations: [
+                {
+                    to: [{ email: to }]
+                }
+            ],
+            from: {
+                email: sender,
+                name: fromName || 'AutoSDR Outreach'
+            },
+            subject: subject,
+            content: [
+                {
+                    type: 'text/html',
+                    value: body
+                }
+            ]
         }, {
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${RESEND_API_KEY}`
+                'Authorization': `Bearer ${SENDGRID_API_KEY}`,
+                'Content-Type': 'application/json'
             }
         });
 
-        const data = response.data;
-        console.log(`[Email] Successfully sent via Resend. ID: ${data.id}`);
-        return { success: true, messageId: data.id };
+        console.log(`[Email] Successfully sent via SendGrid to ${to}`);
+        return { success: true };
     } catch (err: any) {
         const errorData = err.response?.data || err.message;
-        console.error('[Email] Failed to send email:', errorData);
+        console.error('[Email] Failed to send email via SendGrid:', JSON.stringify(errorData, null, 2));
         return { success: false, error: errorData };
     }
-}
+};
 
-export async function sendApprovalEmail(to: string, name: string) {
-    const subject = 'Your AutoSDR Access Request has been Approved!';
-    const body = `Hi ${name},\n\nYour request for access to AutoSDR has been approved. You can now log in using your credentials.\n\nBest,\nThe AutoSDR Team`;
-    return sendOutreachEmail(to, subject, body, 'AutoSDR Support');
-}
-
-export async function checkReplies() {
-    // Note: Resend is a sender API. For reply detection, we typically use webhooks 
-    // or keep the existing IMAP logic if you have one. 
-    // For now, we will leave the reply detection as-is or stub it if it was SMTP-based.
-    console.log('[ReplyDetector] Resend migration bypasses traditional reply polling. Recommendation: Use Webhooks.');
-}
+export const sendApprovalEmail = async (userEmail: string, loginUrl: string) => {
+    return sendOutreachEmail(
+        userEmail,
+        'Confirm your Lead Outreach',
+        `<p>Your outreach campaign is ready. Please <a href="${loginUrl}">login to the dashboard</a> to approve the leads.</p>`,
+        'AutoSDR System'
+    );
+};
