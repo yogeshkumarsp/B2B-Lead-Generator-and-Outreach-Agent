@@ -212,7 +212,7 @@ export class BackendAutoSDRAgent {
                     );
 
                     if (!emailRes.success) {
-                        throw new Error(`Failed to send email via Resend API: ${emailRes.error}`);
+                        throw new Error(`Failed to send email via SendGrid API: ${JSON.stringify(emailRes.error)}`);
                     }
 
                     // Update Lead Status
