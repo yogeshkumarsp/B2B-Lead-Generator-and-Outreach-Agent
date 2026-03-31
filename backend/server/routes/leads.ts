@@ -101,7 +101,7 @@ ${JSON.stringify(filtered.map((b, i) => ({ index: i, name: b.name, types: b.type
 `;
 
         const response = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
-            model: "llama3-70b-8192",
+            model: "llama-3.3-70b-versatile",
             messages: [
                 { 
                     role: "system", 
