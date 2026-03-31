@@ -73,8 +73,8 @@ if (hasFrontend) {
     console.warn(`[SERVER] Frontend dist folder not found at ${frontendDistPath}. API-only mode enabled.`);
 }
 
-// Catch-all route for SPA
-app.get('/:catchall*', (req, res) => {
+// Catch-all route for SPA - Using Native RegExp to bypass Express 5 path-to-regexp issues
+app.get(/.*/, (req, res) => {
     if (req.path.startsWith('/api')) {
         return res.status(404).json({ error: 'API route not found' });
     }
