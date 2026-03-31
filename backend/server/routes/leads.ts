@@ -30,8 +30,8 @@ const localSafetyFilter = (business: any, niche: string): boolean => {
     let globalBlacklist = [
         "restaurant", "cafe", "food", "grocery", "supermarket", "furniture",
         "clothing", "boutique", "salon", "temple", "church", "mosque", "residential", "apartment",
-        "school", "college", "university", "institute", "academy",
-        "placement", "recruitment", "consultancy", "job center", "hiring"
+        "school", "college", "university", "institute", "academy", "training",
+        "placement", "recruitment", "hiring", "consultancy", "staffing"
     ];
 
     // Remove blacklist items if specifically searching for them
@@ -85,12 +85,9 @@ You are a B2B lead evaluator. I am searching for B2B leads for the niche: "${nic
 Your goal is to filter out any that are clearly NOT B2B professional services or relevant business entities.
 
 REJECT:
-- Mass retail (Furniture, Clothing, General stores)
-- Food & Beverage (Restaurants, Cafes)
-${!isBeautySearch ? '- Personal services (Salons, Gyms, Temples)' : '- Temples, Churches, Mosques'}
-${!isEducationSearch ? '- Education (Schools, Colleges, Training centers)' : ''}
-- HR & Recruitment (Placement agencies, Consultancies, Job portals)
-- Retail/Showrooms (Electronics, Hardware, Repair shops)
+- Training Centers & Schools (Computer training, Institutes, Schools)
+- HR & Recruitment (Placement agencies, Consultancy firms, Hiring agencies)
+- Job Portals & Staffing firms
 
 ACCEPT:
 - Information Technology / Software / agencies
