@@ -1,24 +1,26 @@
 import nodemailer from 'nodemailer';
 
-// Use Ethereal for testing, or real credentials if available
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465');
+const SMTP_USER = process.env.SMTP_USER || 'yogeshkumarsp03@gmail.com';
+const SMTP_PASS = process.env.SMTP_PASS || 'lrlr hkaz uvmt lxxo';
+
 const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-    port: parseInt(process.env.SMTP_PORT || '587'),
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_PORT === 465, // SSL for 465, TLS for 587
     auth: {
-        user: process.env.SMTP_USER || 'bernadette.reilly46@ethereal.email',
-        pass: process.env.SMTP_PASS || 'GZkR872B5wR9e1WbC3'
+        user: SMTP_USER,
+        pass: SMTP_PASS
     },
     tls: {
         rejectUnauthorized: false
     },
-    // Force Node.js to use IPv4 instead of IPv6 to avoid ENETUNREACH if network lacks v6 route
-    // (See: https://nodemailer.com/smtp/#general-options)
-    // TypeScript might complain if family isn't on PoolOptions so we cast as any if needed, but standard socket options are usually supported
-    // Actually, setting `localAddress: '0.0.0.0'` also forces IPv4 but `family: 4` is cleaner.
+    // Force IPv4 specifically to prevent ENETUNREACH errors on cloud platforms like Render
+    family: 4
 } as any);
 
 // Specifically override the custom internal options for Node 18+ to definitely use IPv4
-(transporter as any).options.host = process.env.SMTP_HOST || 'smtp.ethereal.email';
 (transporter as any).options.family = 4;
 
 
