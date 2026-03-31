@@ -164,7 +164,7 @@ Return strictly as a JSON object:
         const response = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
             model: GROQ_MODEL,
             messages: [
-                { role: "system", content: "You are a professional B2B email personalization expert. Always respond in valid JSON format." },
+                { role: "system", content: "You are a professional B2B email personalization expert. You MUST respond ONLY with a valid JSON object." },
                 { role: "user", content: `${prompt}\n\nIMPORTANT: Your response must be a valid JSON object.` }
             ],
             response_format: { type: "json_object" }
