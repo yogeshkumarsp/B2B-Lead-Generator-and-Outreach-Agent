@@ -12,13 +12,64 @@ const router = express.Router();
 router.use(requireAuth);
 
 const localSafetyFilter = (business: any, niche: string): boolean => {
-    // All filters removed as per user request for a "Fresh" experience
+    const name = (business.name || "").toLowerCase();
+    const type = (business.types?.[0] || "").toLowerCase();
+    const allTypes = (business.types || []).join(", ").toLowerCase();
+    
+    // Only block the absolute most obvious non-B2B entities (Restaurants, Cafes, Temples)
+    const absoluteBlacklist = ["restaurant", "cafe", "food", "grocery", "salon", "temple", "church", "mosque"];
+    
+    if (absoluteBlacklist.some(term => name.includes(term) || type.includes(term) || allTypes.includes(term))) {
+        return true;
+    }
     return false;
 };
 
 const filterBusinessesByNiche = async (businesses: any[], niche: string): Promise<any[]> => {
-    // AI Filter disabled as per user request for a "Fresh" experience
-    return businesses;
+    // 1. Basic Safety Pass
+    let filtered = businesses.filter(b => !localSafetyFilter(b, niche));
+    if (filtered.length === 0) return filtered;
+
+    try {
+        const apiKey = process.env.GROQ_API_KEY;
+        if (!apiKey) return filtered;
+
+        const prompt = `
+You are a B2B lead evaluator. I am searching for leads for the niche: "${niche}".
+Your goal is to identify if the business is a relevant professional service or business entity for this niche.
+
+Evaluate these businesses. Reject only if they are completely unrelated (e.g. personal services, mass retail, or irrelevant institutions).
+ACCEPT: Professional services, agencies, B2B companies, or entities that match the niche "${niche}".
+
+Return ONLY a valid JSON object with a key 'accepted_indices' containing the indices (0-based) of the businesses you accept.
+Businesses:
+${JSON.stringify(filtered.map((b, i) => ({ index: i, name: b.name, types: b.types })), null, 2)}
+`;
+
+        const response = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
+            model: "llama-3.3-70b-versatile",
+            messages: [
+                { role: "system", content: "You are a professional business lead evaluator. You must respond ONLY with a valid JSON object." },
+                { role: "user", content: prompt }
+            ],
+            response_format: { type: "json_object" }
+        }, {
+            headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json"
+            }
+        });
+
+        const text = response.data.choices[0]?.message?.content || "{}";
+        const parsed = JSON.parse(text);
+        const filteredIndices = parsed.accepted_indices || [];
+        
+        console.log(`[AI Filter] Processed ${filtered.length}. Accepted ${filteredIndices.length} for niche "${niche}".`);
+        return filtered.filter((_, i) => filteredIndices.includes(i));
+    } catch (err: any) {
+        console.error("[AI Filter] Groq evaluation failed, falling back to all results:", err?.message || err);
+        return filtered;
+    }
 };
 
 // POST /api/leads/discover — starts background job
