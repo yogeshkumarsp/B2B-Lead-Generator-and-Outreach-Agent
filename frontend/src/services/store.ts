@@ -130,6 +130,11 @@ class Store {
   // Logs
   getLogs() { return [...this.logs].sort((a, b) => b.timestamp - a.timestamp); }
 
+  setLogs(logs: AgentLog[]) {
+    this.logs = [...logs];
+    this.save();
+  }
+
   addLog(log: Omit<AgentLog, 'id' | 'timestamp'>) {
     const newLog: AgentLog = {
       ...log,

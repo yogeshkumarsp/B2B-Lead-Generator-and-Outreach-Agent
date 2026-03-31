@@ -41,6 +41,10 @@ const Dashboard: React.FC = () => {
         
         // Update Local Cache for "Instant" feel on next refresh
         store.updateDashboardData(data);
+        if (data.recentLogs) {
+          store.setLogs(data.recentLogs);
+          setRecentLogs(data.recentLogs.slice(0, 10));
+        }
 
         setMetrics(data.metrics || { highIntent: 0, lowIntent: 0, sent: 0, replies: 0, interested: 0, pending: 0, activeCampaigns: 0 });
         setHotLeads(data.hotLeads ? data.hotLeads.map(mapLead) : []);
@@ -54,6 +58,10 @@ const Dashboard: React.FC = () => {
     };
 
     fetchData();
+    
+    // Refresh dashboard data every 15 seconds for "Live" feel
+    const mainInterval = setInterval(fetchData, 15000);
+
     const logInterval = setInterval(() => {
       setRecentLogs(store.getLogs().slice(0, 10));
     }, 5000);
@@ -62,6 +70,7 @@ const Dashboard: React.FC = () => {
     window.addEventListener('agent-update', fetchData);
 
     return () => {
+      clearInterval(mainInterval);
       clearInterval(logInterval);
       window.removeEventListener('agent-update', fetchData);
     };

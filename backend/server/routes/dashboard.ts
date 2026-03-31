@@ -20,7 +20,8 @@ router.get('/', async (req: AuthRequest, res) => {
             pendingCount,
             activeCampaignsCount,
             hotLeads,
-            activeCampaigns
+            activeCampaigns,
+            recentLogs
         ] = await Promise.all([
             prisma.lead.count({ where: { userId, intent: 'HIGH' } }),
             prisma.lead.count({ where: { userId, intent: 'LOW' } }),
@@ -42,6 +43,13 @@ router.get('/', async (req: AuthRequest, res) => {
                 where: { userId, status: 'ACTIVE' },
                 take: 3,
                 orderBy: { createdAt: 'desc' }
+            }),
+
+            // Recent Logs for Activity Feed
+            prisma.agentLog.findMany({
+                where: { userId },
+                take: 10,
+                orderBy: { timestamp: 'desc' }
             })
         ]);
 
@@ -56,7 +64,16 @@ router.get('/', async (req: AuthRequest, res) => {
                 activeCampaigns: activeCampaignsCount
             },
             hotLeads,
-            activeCampaigns
+            activeCampaigns,
+            recentLogs: recentLogs.map(l => ({
+                id: l.id,
+                timestamp: l.timestamp.getTime(),
+                level: l.level.toLowerCase(),
+                module: l.module.toLowerCase(),
+                message: l.message,
+                leadId: l.leadId,
+                campaignId: l.campaignId
+            }))
         });
     } catch (err) {
         console.error('[API] Dashboard fetch error:', err);
