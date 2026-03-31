@@ -265,14 +265,16 @@ router.post('/discover', async (req: AuthRequest, res) => {
                     }
                 }));
 
-                const finalLeads = Array.from(finalResultsMap.values())
-                    .filter(l => !l.pending)
-                    .slice(0, 10); // Guarantee exactly 10 for the user per run
-                
-                // Trigger agent
-                backendAgent.forceProcessUser(userId).catch(e => console.error('[API] Agent trigger error:', e));
+                // Capture the leads we want to show (the top 10 from this specific run)
+                // Only return the NEWLY FOUND or UPDATED results from this specific search run
+                const currentRunLeads = businesses.map((business: any) => {
+                    const normName = normalizeName(business.name);
+                    const normAddr = normalizeName(business.address || "");
+                    const key = `${normName}_${normAddr}`;
+                    return finalResultsMap.get(key);
+                }).filter(l => l && !l.pending).slice(0, 10);
 
-                jobManager.updateJob(jobId, { status: 'COMPLETED', results: finalLeads });
+                jobManager.updateJob(jobId, { status: 'COMPLETED', results: currentRunLeads });
             } catch (err: any) {
                 console.error('[Discovery Job] Background error:', err);
                 jobManager.updateJob(jobId, { status: 'FAILED', error: err?.message || 'Unknown discovery error' });
