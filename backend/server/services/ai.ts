@@ -34,12 +34,18 @@ Email Content:
             },
             body: JSON.stringify({
                 model: GROQ_MODEL,
-                messages: [{ role: "user", content: prompt }],
+                messages: [
+                    { role: "system", content: "You are a lead sentiment analyzer. Always respond in valid JSON format." },
+                    { role: "user", content: prompt }
+                ],
                 response_format: { type: "json_object" }
             })
         });
 
-        if (!response.ok) throw new Error(`Groq API Error: ${response.statusText}`);
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(`Groq API Error: ${response.status} ${JSON.stringify(errData)}`);
+        }
         
         const data = await response.json();
         const text = data.choices[0]?.message?.content || '{"sentiment": "NEUTRAL", "summary": "Failed to parse AI response"}';
@@ -90,12 +96,18 @@ Return ONLY a valid JSON object:
             },
             body: JSON.stringify({
                 model: GROQ_MODEL,
-                messages: [{ role: "user", content: prompt }],
+                messages: [
+                    { role: "system", content: "You are a helpful assistant that always responds in valid JSON format." },
+                    { role: "user", content: prompt }
+                ],
                 response_format: { type: "json_object" }
             })
         });
 
-        if (!response.ok) throw new Error(`Groq API Error: ${response.statusText}`);
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(`Groq API Error: ${response.status} ${JSON.stringify(errData)}`);
+        }
 
         const data = await response.json();
         const text = data.choices[0]?.message?.content || '{}';
@@ -197,10 +209,18 @@ Return as a JSON array of objects with: "step", "day_delay", "template_name", "s
             },
             body: JSON.stringify({
                 model: GROQ_MODEL,
-                messages: [{ role: "user", content: prompt }],
+                messages: [
+                    { role: "system", content: "You are an outreach expert. Always respond in valid JSON format." },
+                    { role: "user", content: prompt }
+                ],
                 response_format: { type: "json_object" }
             })
         });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(`Groq API Error: ${response.status} ${JSON.stringify(errData)}`);
+        }
 
         const data = await response.json();
         const text = data.choices[0]?.message?.content || "[]";

@@ -6,11 +6,25 @@ const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465');
 const SMTP_USER = process.env.SMTP_USER || 'yogeshkumarsp03@gmail.com';
 const SMTP_PASS = process.env.SMTP_PASS || 'lrlr hkaz uvmt lxxo';
 
+// Helper to resolve hostname to IPv4 strictly
+let RESOLVED_SMTP_IP = SMTP_HOST;
+try {
+    dns.resolve4(SMTP_HOST, (err, addresses) => {
+        if (!err && addresses.length > 0) {
+            RESOLVED_SMTP_IP = addresses[0];
+            console.log(`[SMTP-PreResolve] Resolved ${SMTP_HOST} to IPv4: ${RESOLVED_SMTP_IP}`);
+        }
+    });
+} catch (e) {
+    console.error('[SMTP-PreResolve] Failed to pre-resolve host:', e);
+}
+
 const transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
+    // We use the pre-resolved IP or the hostname. In the lookup below we force IPv4 again.
+    host: SMTP_HOST, 
     port: SMTP_PORT,
     secure: SMTP_PORT === 465, // SSL for 465, TLS for 587
-    pool: true, // Use connection pooling for speed
+    pool: true, 
     maxConnections: 1,
     maxMessages: 100,
     auth: {
@@ -18,18 +32,27 @@ const transporter = nodemailer.createTransport({
         pass: SMTP_PASS
     },
     tls: {
-        rejectUnauthorized: false
+        rejectUnauthorized: false,
+        servername: SMTP_HOST // Required when using IP or if certificates are sensitive
     },
-    // Force direct IPv4 and set aggressive timeouts (10s) to avoid long hangs
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+    // Extremely strict lookup override
     lookup: (hostname: string, options: any, callback: any) => {
-        dns.lookup(hostname, { family: 4 }, callback);
+        dns.lookup(hostname, { family: 4, all: false }, (err, address, family) => {
+            if (err) return callback(err);
+            // If for some reason we still got an IPv6 (contains ':'), force a retry or fail
+            if (address.includes(':')) {
+                console.error(`[DNS-BLOCK] Blocking IPv6 address: ${address}`);
+                return dns.lookup(hostname, { family: 4 }, callback);
+            }
+            callback(null, address, family);
+        });
     }
 } as any);
 
-// Re-enforce options for compatibility
+// Re-enforce IPv4 at the node 'net' level for this transporter
 (transporter as any).options.family = 4;
 
 
