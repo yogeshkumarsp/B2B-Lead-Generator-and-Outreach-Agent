@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
 
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465');
@@ -16,11 +17,13 @@ const transporter = nodemailer.createTransport({
     tls: {
         rejectUnauthorized: false
     },
-    // Force IPv4 specifically to prevent ENETUNREACH errors on cloud platforms like Render
-    family: 4
+    // Custom DNS lookup to strictly force IPv4
+    lookup: (hostname: string, options: any, callback: any) => {
+        dns.lookup(hostname, { family: 4 }, callback);
+    }
 } as any);
 
-// Specifically override the custom internal options for Node 18+ to definitely use IPv4
+// Re-enforce options for compatibility
 (transporter as any).options.family = 4;
 
 
