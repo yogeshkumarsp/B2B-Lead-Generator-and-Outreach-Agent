@@ -15,6 +15,9 @@
     "build": "npm run build --workspaces --if-present",
     "start": "npm run start --workspace backend"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "devDependencies": {
     "concurrently": "^9.2.1"
   }

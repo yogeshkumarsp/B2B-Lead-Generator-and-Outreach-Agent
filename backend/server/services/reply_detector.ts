@@ -1,8 +1,8 @@
 import { ImapFlow } from 'imapflow';
-import { prisma } from '../db';
+import { prisma } from '../db.js';
 import { simpleParser } from 'mailparser';
-import { analyzeReplySentiment, generateConversationalReply } from './ai';
-import { sendOutreachEmail } from './email';
+import { analyzeReplySentiment, generateConversationalReply } from './ai.js';
+import { sendOutreachEmail } from './email.js';
 
 export class ReplyDetector {
     private client: ImapFlow | null = null;

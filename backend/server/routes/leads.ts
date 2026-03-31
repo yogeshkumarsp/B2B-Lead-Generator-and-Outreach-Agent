@@ -1,10 +1,10 @@
 import express from 'express';
 import axios from 'axios';
-import { searchBusinesses } from '../services/maps';
-import { prisma } from '../db';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { backendAgent } from '../services/agent';
-import { jobManager } from '../services/jobManager';
+import { searchBusinesses } from '../services/maps.js';
+import { prisma } from '../db.js';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { backendAgent } from '../services/agent.js';
+import { jobManager } from '../services/jobManager.js';
 
 const router = express.Router();
 

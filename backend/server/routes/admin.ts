@@ -1,7 +1,7 @@
 import express from 'express';
-import { prisma } from '../db';
-import { requireAuth, requireAdmin, AuthRequest } from '../middleware/auth';
-import { sendApprovalEmail } from '../services/email';
+import { prisma } from '../db.js';
+import { requireAuth, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { sendApprovalEmail } from '../services/email.js';
 
 const router = express.Router();
 

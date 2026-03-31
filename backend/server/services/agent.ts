@@ -1,6 +1,6 @@
-import { prisma } from '../db';
-import { sendOutreachEmail } from './email';
-import { generatePersonalizedEmail } from './ai';
+import { prisma } from '../db.js';
+import { sendOutreachEmail } from './email.js';
+import { generatePersonalizedEmail } from './ai.js';
 
 export class BackendAutoSDRAgent {
     private intervalId: NodeJS.Timeout | null = null;

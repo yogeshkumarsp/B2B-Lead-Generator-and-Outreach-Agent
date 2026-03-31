@@ -1,42 +1,29 @@
-console.log('[SERVER] Initializing Boot sequence...');
-process.on('uncaughtException', (err) => {
-    console.error('[SERVER] FATAL CRASH (uncaught):', err);
-    process.exit(1);
-});
-process.on('unhandledRejection', (reason) => {
-    console.error('[SERVER] FATAL CRASH (rejection):', reason);
-    process.exit(1);
-});
-
-import './env';
+import './init.js';
+import './env.js';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
-import leadsRouter from './routes/leads';
-import campaignsRouter from './routes/campaigns';
-import authRouter from './routes/auth';
-import settingsRouter from './routes/settings';
-import logsRouter from './routes/logs';
-import adminRouter from './routes/admin';
-import outreachRouter from './routes/outreach';
-import dashboardRouter from './routes/dashboard';
-import aiRouter from './routes/ai';
-
-
-process.on('uncaughtException', (err) => {
-    console.error('[SERVER] Uncaught Exception:', err);
-});
-process.on('unhandledRejection', (reason) => {
-    console.error('[SERVER] Unhandled Rejection:', reason);
-});
+import leadsRouter from './routes/leads.js';
+import campaignsRouter from './routes/campaigns.js';
+import authRouter from './routes/auth.js';
+import settingsRouter from './routes/settings.js';
+import logsRouter from './routes/logs.js';
+import adminRouter from './routes/admin.js';
+import outreachRouter from './routes/outreach.js';
+import dashboardRouter from './routes/dashboard.js';
+import aiRouter from './routes/ai.js';
 
 const app = express();
 const PORT = process.env.PORT || 6001;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Monorepo-aware static file path
 const frontendDistPath = path.join(__dirname, '../../frontend/dist');
+const hasFrontend = fs.existsSync(frontendDistPath);
 
 const allowedOrigins = [
     'http://localhost:3000', 'http://127.0.0.1:3000',
@@ -46,7 +33,6 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps or curl)
         if (!origin) return callback(null, true);
         if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
             callback(null, true);
@@ -76,27 +62,36 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/ai', aiRouter);
 
 app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: Date.now() });
+    res.json({ status: 'ok', timestamp: Date.now(), frontend: hasFrontend });
 });
 
-// Serve static files from the React app
-app.use(express.static(frontendDistPath));
+// Serve static files ONLY if they exist
+if (hasFrontend) {
+    console.log(`[SERVER] Serving frontend from: ${frontendDistPath}`);
+    app.use(express.static(frontendDistPath));
+} else {
+    console.warn(`[SERVER] Frontend dist folder not found at ${frontendDistPath}. API-only mode enabled.`);
+}
 
 // Catch-all route for SPA
-app.get('*path', (req, res) => {
+app.get('*', (req, res) => {
     if (req.path.startsWith('/api')) {
         return res.status(404).json({ error: 'API route not found' });
     }
-    res.sendFile(path.join(frontendDistPath, 'index.html'));
+    
+    if (hasFrontend) {
+        res.sendFile(path.join(frontendDistPath, 'index.html'));
+    } else {
+        res.json({ message: 'AutoSDR Backend is running. Frontend not deployed on this instance.' });
+    }
 });
 
-import { replyDetector } from './services/reply_detector';
-import { backendAgent } from './services/agent';
+import { replyDetector } from './services/reply_detector.js';
+import { backendAgent } from './services/agent.js';
 
-const server = app.listen(PORT as number, '0.0.0.0', async () => {
+const server = app.listen(Number(PORT), '0.0.0.0', async () => {
     console.log(`✅ AutoSDR Server running on http://127.0.0.1:${PORT}`);
 
-    // Start automated reply detection and SDR agent
     try {
         await replyDetector.start();
         backendAgent.start();

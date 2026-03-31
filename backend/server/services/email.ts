@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { prisma } from '../db';
+import { prisma } from '../db.js';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 // Default to onboarding if no sender email provided
@@ -45,6 +45,12 @@ export async function sendOutreachEmail(
         console.error('[Email] Failed to send email:', errorData);
         return { success: false, error: errorData };
     }
+}
+
+export async function sendApprovalEmail(to: string, name: string) {
+    const subject = 'Your AutoSDR Access Request has been Approved!';
+    const body = `Hi ${name},\n\nYour request for access to AutoSDR has been approved. You can now log in using your credentials.\n\nBest,\nThe AutoSDR Team`;
+    return sendOutreachEmail(to, subject, body, 'AutoSDR Support');
 }
 
 export async function checkReplies() {

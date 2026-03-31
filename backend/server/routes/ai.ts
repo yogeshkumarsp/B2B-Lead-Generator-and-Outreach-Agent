@@ -1,7 +1,7 @@
 import express from 'express';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { generatePersonalizedEmail, generateNicheSequence } from '../services/ai';
-import { prisma } from '../db';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { generatePersonalizedEmail, generateNicheSequence } from '../services/ai.js';
+import { prisma } from '../db.js';
 
 const router = express.Router();
 router.use(requireAuth);

@@ -1,8 +1,8 @@
 import express from 'express';
-import { prisma } from '../db';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { sendOutreachEmail } from '../services/email';
-import { backendAgent } from '../services/agent';
+import { prisma } from '../db.js';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { sendOutreachEmail } from '../services/email.js';
+import { backendAgent } from '../services/agent.js';
 
 const router = express.Router();
 router.use(requireAuth);
