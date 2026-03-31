@@ -1,6 +1,6 @@
 import { prisma } from '../db';
 import { sendOutreachEmail } from './email';
-import { generatePersonalizedEmail, isAICooledDown, getAICoolDownRemaining } from '../../../frontend/src/services/gemini.js';
+import { generatePersonalizedEmail } from './ai';
 
 export class BackendAutoSDRAgent {
     private intervalId: NodeJS.Timeout | null = null;
@@ -165,18 +165,7 @@ export class BackendAutoSDRAgent {
         let currentlySent = 0;
         if (recentLogs >= settings.hourlyThrottleLimit) return;
 
-        if (isAICooledDown()) {
-            const remaining = Math.ceil(getAICoolDownRemaining() / 1000);
-            await prisma.agentLog.create({
-                data: {
-                    userId,
-                    level: 'WARNING',
-                    module: 'AI',
-                    message: `Outreach paused: AI services in cool-down (${remaining}s remaining).`
-                }
-            });
-            return;
-        }
+        // AI Cooldown check removed (Migration to Groq)
 
         for (const campaign of campaigns) {
             const campaignLeads = leads.filter(l =>

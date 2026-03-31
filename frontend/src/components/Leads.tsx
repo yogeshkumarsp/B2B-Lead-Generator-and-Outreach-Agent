@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../services/apiFetch';
 import { store } from '../services/store';
-import { discoverLeadsAI, generateNicheSequence } from '../services/gemini';
+import { discoverLeadsAI, generateNicheSequence } from '../services/ai';
 import { Card, Button, Input, Badge } from './Common';
 import { Lead, LeadStatus, LogLevel, LogModule, OutreachStatus } from '../types';
 import { agent } from '../services/agent';

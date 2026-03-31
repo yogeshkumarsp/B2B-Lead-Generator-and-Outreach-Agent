@@ -2,9 +2,7 @@ import express from 'express';
 import { searchBusinesses } from '../services/maps';
 import { prisma } from '../db';
 import { requireAuth, AuthRequest } from '../middleware/auth';
-import { GoogleGenAI } from '@google/genai';
 import { backendAgent } from '../services/agent';
-import { executeWithRetry } from '../../../frontend/src/services/gemini.js';
 import { jobManager } from '../services/jobManager';
 
 const router = express.Router();
@@ -71,11 +69,9 @@ const filterBusinessesByNiche = async (businesses: any[], niche: string): Promis
     if (filtered.length === 0) return filtered;
 
     try {
-        const keysStr = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || process.env.API_KEY;
-        const keys = keysStr ? keysStr.split(',').map(k => k.trim()).filter(Boolean) : [];
-        
-        if (keys.length === 0) {
-            console.log(`[AI Filter] No API key, using local filtered results (${filtered.length})`);
+        const apiKey = process.env.GROQ_API_KEY;
+        if (!apiKey) {
+            console.log(`[AI Filter] No GROQ_API_KEY, using local filtered results (${filtered.length})`);
             return filtered;
         }
 
@@ -103,19 +99,36 @@ Businesses:
 ${JSON.stringify(filtered.map((b, i) => ({ index: i, name: b.name, types: b.types })), null, 2)}
 `;
 
-        const filteredIndices = await executeWithRetry(async (client) => {
-            const response = await client.models.generateContent({
-                model: "gemini-2.0-flash",
-                contents: prompt
-            });
-            const text = response.text?.replace(/```json|```/g, '').trim() || "[]";
-            return JSON.parse(text) as number[];
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                model: "llama3-70b-8192",
+                messages: [{ role: "user", content: prompt }],
+                response_format: { type: "json_object" }
+            })
         });
 
+        if (!response.ok) throw new Error(`Groq API Error: ${response.statusText}`);
+        
+        const data = await response.json();
+        const text = data.choices[0]?.message?.content || "[]";
+        // Groq sometimes returns a JSON object with the array inside, or just the array string.
+        // We'll try to extract the array.
+        let parsed = JSON.parse(text);
+        if (!Array.isArray(parsed) && typeof parsed === 'object') {
+            // Check for keys like "accepted_indices", "indices", etc.
+            parsed = parsed.indices || parsed.accepted_indices || Object.values(parsed)[0];
+        }
+        
+        const filteredIndices = Array.isArray(parsed) ? parsed : [];
         console.log(`[AI Filter] Evaluated ${filtered.length} businesses. Accepted ${filteredIndices.length} for niche "${niche}".`);
         return filtered.filter((_, i) => filteredIndices.includes(i));
     } catch (err: any) {
-        console.error("[AI Filter] AI Filter failed, falling back to all local results:", err?.message || err);
+        console.error("[AI Filter] Groq Filter failed, falling back to all local results:", err?.message || err);
         return filtered;
     }
 };

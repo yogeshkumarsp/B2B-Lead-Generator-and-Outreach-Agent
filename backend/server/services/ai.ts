@@ -1,21 +1,14 @@
-import { GoogleGenAI } from '@google/genai';
-import { isAICooledDown, AICoolDownError, getAICoolDownRemaining } from '../../../frontend/src/services/gemini';
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GROQ_MODEL = "llama3-70b-8192";
 
 export const analyzeReplySentiment = async (content: string): Promise<{ sentiment: string; summary: string }> => {
-    if (isAICooledDown()) {
-        return { sentiment: 'NEUTRAL', summary: 'AI is in cool-down (Quota reached)' };
-    }
-
-    const keysStr = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || process.env.API_KEY;
-    const keys = keysStr ? keysStr.split(',').map(k => k.trim()).filter(Boolean) : [];
-    
-    if (keys.length === 0) {
-        console.warn('[AI Service] No API Key found, skipping sentiment analysis');
+    if (!GROQ_API_KEY) {
+        console.warn('[AI Service] No GROQ_API_KEY found, skipping sentiment analysis');
         return { sentiment: 'NEUTRAL', summary: 'AI Analysis skipped (No API Key)' };
     }
 
     const prompt = `
-You are an AI sales assistant. Analyze the following email reply from a potential B2B lead.
+Analyze the following email reply from a potential B2B lead.
 Classify the sentiment and intent into exactly one of these categories:
 - INTERESTED: The lead wants to talk, book a meeting, or asks for more info.
 - NOT_INTERESTED: The lead says no, stop contacting, or they are happy with their current provider.
@@ -32,28 +25,29 @@ Email Content:
 "${content}"
 `;
 
-    for (const apiKey of keys) {
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            const response = await ai.models.generateContent({
-                model: "gemini-2.0-flash",
-                contents: prompt
-            });
+    try {
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${GROQ_API_KEY}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                model: GROQ_MODEL,
+                messages: [{ role: "user", content: prompt }],
+                response_format: { type: "json_object" }
+            })
+        });
 
-            const text = response.text?.replace(/```json|```/g, '').trim() || '{"sentiment": "NEUTRAL", "summary": "Failed to parse AI response"}';
-            return JSON.parse(text);
-        } catch (err: any) {
-            if (err.status === 429 || err.status === 403) {
-                console.warn(`[AI Service] Key failed with status ${err.status}. Switching to next key...`);
-                continue; // Try next key
-            }
-            console.error('[AI Service] Error analyzing sentiment:', err);
-            return { sentiment: 'NEUTRAL', summary: 'Analysis failed due to unexpected error' };
-        }
+        if (!response.ok) throw new Error(`Groq API Error: ${response.statusText}`);
+        
+        const data = await response.json();
+        const text = data.choices[0]?.message?.content || '{"sentiment": "NEUTRAL", "summary": "Failed to parse AI response"}';
+        return JSON.parse(text);
+    } catch (err: any) {
+        console.error('[AI Service] Error analyzing sentiment with Groq:', err);
+        return { sentiment: 'NEUTRAL', summary: 'Analysis failed due to unexpected error' };
     }
-
-    console.warn('[AI Service] All API keys exhausted or suspended.');
-    return { sentiment: 'NEUTRAL', summary: 'All API keys exhausted or suspended' };
 };
 
 export const generateConversationalReply = async (
@@ -62,15 +56,8 @@ export const generateConversationalReply = async (
     sentiment: string,
     settings: any
 ): Promise<{ subject: string; body: string }> => {
-    if (isAICooledDown()) {
-        throw new AICoolDownError(getAICoolDownRemaining());
-    }
-
-    const keysStr = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || process.env.API_KEY;
-    const keys = keysStr ? keysStr.split(',').map(k => k.trim()).filter(Boolean) : [];
-    
-    if (keys.length === 0) {
-        throw new Error('No API Key found for generating reply');
+    if (!GROQ_API_KEY) {
+        throw new Error('No GROQ_API_KEY found for generating reply');
     }
 
     const persona = settings?.agentPersona || 'You are a professional B2B SDR.';
@@ -79,51 +66,149 @@ export const generateConversationalReply = async (
 You are acting as an AI Sales Development Representative.
 Persona Guidelines: ${persona}
 
-You are currently talking to:
-Name: ${lead.name || lead.companyName}
-Company: ${lead.companyName}
-Industry: ${lead.industry || 'B2B'}
+Talking to: ${lead.name || lead.companyName} at ${lead.companyName} (${lead.industry || 'B2B'})
 
-The lead just replied to your previous cold email with this message:
-"${replyText}"
+The lead just replied: "${replyText}" (Sentiment: ${sentiment})
 
-The sentiment of their reply was classified as: ${sentiment}
+Task: Write a conversational, concise email response (under 4 sentences).
+- If INTERESTED: Suggest a 5-10 min call and ask for availability.
+- If NOT_INTERESTED: Polite and brief closing.
 
-Your task:
-Write a conversational, concise, and professional email response addressing their reply.
-If they asked a question, answer it confidently based on the context of selling an AI Outreach Automation platform.
-If they are interested, suggest a quick 5-10 minute introductory call and ask for their availability.
-If they are NOT_INTERESTED, write a polite and very brief closing email thanking them for their time.
-
-Return ONLY a valid JSON object with two fields (do NOT include markdown formatting like \`\`\`json):
+Return ONLY a valid JSON object:
 {
   "subject": "Re: Your previous subject context (make it natural)",
-  "body": "Your email response body here. Keep it under 4 sentences."
+  "body": "Your email response body here."
 }
 `;
 
-    for (const apiKey of keys) {
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            const response = await ai.models.generateContent({
-                model: "gemini-2.0-flash",
-                contents: prompt
-            });
+    try {
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${GROQ_API_KEY}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                model: GROQ_MODEL,
+                messages: [{ role: "user", content: prompt }],
+                response_format: { type: "json_object" }
+            })
+        });
 
-            const text = response.text?.replace(/```json|```/g, '').trim() || '{}';
-            const parsed = JSON.parse(text);
-            if (!parsed.subject || !parsed.body) throw new Error("Invalid output format");
-            
-            return {
-                subject: parsed.subject,
-                body: parsed.body
-            };
-        } catch (err: any) {
-            if (err.status === 429 || err.status === 403) continue;
-            console.error('[AI Service] Error generating reply:', err);
-            throw err;
-        }
+        if (!response.ok) throw new Error(`Groq API Error: ${response.statusText}`);
+
+        const data = await response.json();
+        const text = data.choices[0]?.message?.content || '{}';
+        const parsed = JSON.parse(text);
+        if (!parsed.subject || !parsed.body) throw new Error("Invalid output format");
+        
+        return {
+            subject: parsed.subject,
+            body: parsed.body
+        };
+    } catch (err: any) {
+        console.error('[AI Service] Error generating reply with Groq:', err);
+        throw err;
+    }
+};
+
+export const generatePersonalizedEmail = async (
+    lead: any,
+    template: string,
+    subjectTemplate: string,
+    settings: any
+): Promise<{ subject: string; body: string }> => {
+    if (!GROQ_API_KEY) {
+        throw new Error('No GROQ_API_KEY found for personalization');
     }
 
-    throw new Error('All API keys exhausted or suspended');
+    const aiTargetKeyword = lead.searchNiche || lead.industry || 'B2B';
+    const prompt = `
+Persona: ${settings?.agentPersona || 'You are a professional B2B SDR.'}
+Subject Template: ${subjectTemplate}
+Body Template: ${template}
+
+Lead Details:
+- Name: ${lead.name || lead.companyName}
+- Company: ${lead.companyName}
+- Industry: ${aiTargetKeyword}
+- Location: ${lead.address || lead.searchLocation}
+
+Task: Write a highly personalized B2B outreach email based on the templates. 
+CRITICAL: Use the templates as a structural framework, but write an intelligent, industry-specific email. Avoid all brackets like {company}.
+
+Return strictly as a JSON object:
+{"subject": "personalized subject", "body": "personalized email body"}
+`;
+
+    try {
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${GROQ_API_KEY}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                model: GROQ_MODEL,
+                messages: [{ role: "user", content: prompt }],
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!response.ok) throw new Error(`Groq API Error: ${response.statusText}`);
+        
+        const data = await response.json();
+        const text = data.choices[0]?.message?.content || "{}";
+        const parsed = JSON.parse(text);
+        
+        return {
+            subject: parsed.subject || subjectTemplate,
+            body: parsed.body || template
+        };
+    } catch (err) {
+        console.error('[AI Service] Personalization failed with Groq:', err);
+        // Fallback to basic replacement
+        const fallback = (t: string) => t.replace(/{company}|{name}|{industry}/gi, lead.companyName || '');
+        return {
+            subject: fallback(subjectTemplate),
+            body: fallback(template)
+        };
+    }
+};
+
+export const generateNicheSequence = async (niche: string, location: string): Promise<any[]> => {
+    if (!GROQ_API_KEY) {
+        throw new Error('No GROQ_API_KEY found for sequence generation');
+    }
+
+    const prompt = `
+Create a professional 5-step B2B outreach sequence for the niche: "${niche}" in "${location}".
+Focus: Selling an AI-powered outreach automation platform.
+
+Return as a JSON array of objects with: "step", "day_delay", "template_name", "subject", "body".
+`;
+
+    try {
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${GROQ_API_KEY}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                model: GROQ_MODEL,
+                messages: [{ role: "user", content: prompt }],
+                response_format: { type: "json_object" }
+            })
+        });
+
+        const data = await response.json();
+        const text = data.choices[0]?.message?.content || "[]";
+        let parsed = JSON.parse(text);
+        if (parsed.steps) parsed = parsed.steps; // Handle nested objects
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (err) {
+        console.error('[AI Service] Sequence generation failed:', err);
+        return [];
+    }
 };

@@ -11,6 +11,7 @@ import logsRouter from './routes/logs';
 import adminRouter from './routes/admin';
 import outreachRouter from './routes/outreach';
 import dashboardRouter from './routes/dashboard';
+import aiRouter from './routes/ai';
 
 
 process.on('uncaughtException', (err) => {
@@ -62,6 +63,7 @@ app.use('/api/logs', logsRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/outreach', outreachRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/ai', aiRouter);
 
 app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: Date.now() });
