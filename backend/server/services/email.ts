@@ -10,6 +10,9 @@ const transporter = nodemailer.createTransport({
     host: SMTP_HOST,
     port: SMTP_PORT,
     secure: SMTP_PORT === 465, // SSL for 465, TLS for 587
+    pool: true, // Use connection pooling for speed
+    maxConnections: 1,
+    maxMessages: 100,
     auth: {
         user: SMTP_USER,
         pass: SMTP_PASS
@@ -17,7 +20,10 @@ const transporter = nodemailer.createTransport({
     tls: {
         rejectUnauthorized: false
     },
-    // Custom DNS lookup to strictly force IPv4
+    // Force direct IPv4 and set aggressive timeouts (10s) to avoid long hangs
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     lookup: (hostname: string, options: any, callback: any) => {
         dns.lookup(hostname, { family: 4 }, callback);
     }
