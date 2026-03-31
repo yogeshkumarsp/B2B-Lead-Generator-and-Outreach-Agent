@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = "llama3-70b-8192";
 
@@ -26,38 +28,31 @@ Email Content:
 `;
 
     try {
-        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: "POST",
+        const response = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
+            model: GROQ_MODEL,
+            messages: [
+                { 
+                    role: "system", 
+                    content: "You are a lead sentiment analyzer. You must respond ONLY with a valid JSON object." 
+                },
+                { 
+                    role: "user", 
+                    content: `${prompt}\n\nIMPORTANT: Your response must be a valid JSON object.` 
+                }
+            ],
+            response_format: { type: "json_object" }
+        }, {
             headers: {
                 "Authorization": `Bearer ${GROQ_API_KEY}`,
                 "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model: GROQ_MODEL,
-                messages: [
-                    { 
-                        role: "system", 
-                        content: "You are a lead sentiment analyzer. You must respond ONLY with a valid JSON object." 
-                    },
-                    { 
-                        role: "user", 
-                        content: `${prompt}\n\nIMPORTANT: Your response must be a valid JSON object.` 
-                    }
-                ],
-                response_format: { type: "json_object" }
-            })
+            }
         });
 
-        if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(`Groq API Error: ${response.status} ${JSON.stringify(errData)}`);
-        }
-        
-        const data = await response.json();
+        const data = response.data;
         const text = data.choices[0]?.message?.content || '{"sentiment": "NEUTRAL", "summary": "Failed to parse AI response"}';
         return JSON.parse(text);
     } catch (err: any) {
-        console.error('[AI Service] Error analyzing sentiment with Groq:', err);
+        console.error('[AI Service] Error analyzing sentiment with Groq:', err.response?.data || err.message);
         return { sentiment: 'NEUTRAL', summary: 'Analysis failed due to unexpected error' };
     }
 };
@@ -94,34 +89,27 @@ Return ONLY a valid JSON object:
 `;
 
     try {
-        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: "POST",
+        const response = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
+            model: GROQ_MODEL,
+            messages: [
+                { 
+                    role: "system", 
+                    content: "You are a professional B2B email personalization expert. You must respond ONLY with a valid JSON object matching the requested schema." 
+                },
+                { 
+                    role: "user", 
+                    content: `${prompt}\n\nIMPORTANT: Your response must be a valid JSON object. Do not include any text outside the JSON structure.` 
+                }
+            ],
+            response_format: { type: "json_object" }
+        }, {
             headers: {
                 "Authorization": `Bearer ${GROQ_API_KEY}`,
                 "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model: GROQ_MODEL,
-                messages: [
-                    { 
-                        role: "system", 
-                        content: "You are a professional B2B email personalization expert. You must respond ONLY with a valid JSON object matching the requested schema." 
-                    },
-                    { 
-                        role: "user", 
-                        content: `${prompt}\n\nIMPORTANT: Your response must be a valid JSON object. Do not include any text outside the JSON structure.` 
-                    }
-                ],
-                response_format: { type: "json_object" }
-            })
+            }
         });
 
-        if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(`Groq API Error: ${response.status} ${JSON.stringify(errData)}`);
-        }
-
-        const data = await response.json();
+        const data = response.data;
         const text = data.choices[0]?.message?.content || '{}';
         const parsed = JSON.parse(text);
         if (!parsed.subject || !parsed.body) throw new Error("Invalid output format");
@@ -131,7 +119,7 @@ Return ONLY a valid JSON object:
             body: parsed.body
         };
     } catch (err: any) {
-        console.error('[AI Service] Error generating reply with Groq:', err);
+        console.error('[AI Service] Error generating reply with Groq:', err.response?.data || err.message);
         throw err;
     }
 };
@@ -166,22 +154,21 @@ Return strictly as a JSON object:
 `;
 
     try {
-        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: "POST",
+        const response = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
+            model: GROQ_MODEL,
+            messages: [
+                { role: "system", content: "You are a professional B2B email personalization expert. Always respond in valid JSON format." },
+                { role: "user", content: `${prompt}\n\nIMPORTANT: Your response must be a valid JSON object.` }
+            ],
+            response_format: { type: "json_object" }
+        }, {
             headers: {
                 "Authorization": `Bearer ${GROQ_API_KEY}`,
                 "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model: GROQ_MODEL,
-                messages: [{ role: "user", content: prompt }],
-                response_format: { type: "json_object" }
-            })
+            }
         });
 
-        if (!response.ok) throw new Error(`Groq API Error: ${response.statusText}`);
-        
-        const data = await response.json();
+        const data = response.data;
         const text = data.choices[0]?.message?.content || "{}";
         const parsed = JSON.parse(text);
         
@@ -189,8 +176,8 @@ Return strictly as a JSON object:
             subject: parsed.subject || subjectTemplate,
             body: parsed.body || template
         };
-    } catch (err) {
-        console.error('[AI Service] Personalization failed with Groq:', err);
+    } catch (err: any) {
+        console.error('[AI Service] Personalization failed with Groq:', err.response?.data || err.message);
         // Fallback to basic replacement
         const fallback = (t: string) => t.replace(/{company}|{name}|{industry}/gi, lead.companyName || '');
         return {
@@ -213,40 +200,33 @@ Return as a JSON array of objects with: "step", "day_delay", "template_name", "s
 `;
 
     try {
-        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: "POST",
+        const response = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
+            model: GROQ_MODEL,
+            messages: [
+                { 
+                    role: "system", 
+                    content: "You are an outreach expert. You must respond ONLY with a valid JSON array or object." 
+                },
+                { 
+                    role: "user", 
+                    content: `${prompt}\n\nIMPORTANT: Your response must be valid JSON.` 
+                }
+            ],
+            response_format: { type: "json_object" }
+        }, {
             headers: {
                 "Authorization": `Bearer ${GROQ_API_KEY}`,
                 "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model: GROQ_MODEL,
-                messages: [
-                    { 
-                        role: "system", 
-                        content: "You are an outreach expert. You must respond ONLY with a valid JSON array or object." 
-                    },
-                    { 
-                        role: "user", 
-                        content: `${prompt}\n\nIMPORTANT: Your response must be valid JSON.` 
-                    }
-                ],
-                response_format: { type: "json_object" }
-            })
+            }
         });
 
-        if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(`Groq API Error: ${response.status} ${JSON.stringify(errData)}`);
-        }
-
-        const data = await response.json();
+        const data = response.data;
         const text = data.choices[0]?.message?.content || "[]";
         let parsed = JSON.parse(text);
         if (parsed.steps) parsed = parsed.steps; // Handle nested objects
         return Array.isArray(parsed) ? parsed : [];
-    } catch (err) {
-        console.error('[AI Service] Sequence generation failed:', err);
+    } catch (err: any) {
+        console.error('[AI Service] Sequence generation failed:', err.response?.data || err.message);
         return [];
     }
 };

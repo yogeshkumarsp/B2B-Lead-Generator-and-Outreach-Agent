@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { prisma } from '../db';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
@@ -15,39 +16,34 @@ export async function sendOutreachEmail(
         console.log(`[Email] Preparing to send via Resend API to: ${to}`);
 
         if (!RESEND_API_KEY) {
-            throw new Error('RESEND_API_KEY is not configured. Please add it to environment variables.');
+            const errorMsg = 'RESEND_API_KEY is not configured. Email will not be sent.';
+            console.error(`[Email] ${errorMsg}`);
+            return { success: false, error: errorMsg };
         }
 
         const from = senderName 
             ? `${senderName} <${fromEmail || SENDER_EMAIL}>`
             : fromEmail || SENDER_EMAIL;
 
-        const response = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
+        const response = await axios.post('https://api.resend.com/emails', {
+            from,
+            to: [to],
+            subject,
+            html: body.replace(/\n/g, '<br/>') // Basic text to HTML conversion
+        }, {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${RESEND_API_KEY}`
-            },
-            body: JSON.stringify({
-                from,
-                to: [to],
-                subject,
-                html: body.replace(/\n/g, '<br/>') // Basic text to HTML conversion
-            })
+            }
         });
 
-        const data = await response.json();
-
-        if (!response.ok) {
-            console.error('[Email] Resend API Error:', JSON.stringify(data));
-            throw new Error(data.message || 'Failed to send email via Resend');
-        }
-
+        const data = response.data;
         console.log(`[Email] Successfully sent via Resend. ID: ${data.id}`);
         return { success: true, messageId: data.id };
     } catch (err: any) {
-        console.error('[Email] Failed to send email:', err);
-        return { success: false, error: err?.message || err };
+        const errorData = err.response?.data || err.message;
+        console.error('[Email] Failed to send email:', errorData);
+        return { success: false, error: errorData };
     }
 }
 

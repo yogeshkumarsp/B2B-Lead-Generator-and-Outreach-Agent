@@ -1,4 +1,5 @@
 import express from 'express';
+import axios from 'axios';
 import { searchBusinesses } from '../services/maps';
 import { prisma } from '../db';
 import { requireAuth, AuthRequest } from '../middleware/auth';
@@ -99,34 +100,27 @@ Businesses:
 ${JSON.stringify(filtered.map((b, i) => ({ index: i, name: b.name, types: b.types })), null, 2)}
 `;
 
-        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: "POST",
+        const response = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
+            model: "llama3-70b-8192",
+            messages: [
+                { 
+                    role: "system", 
+                    content: "You are a B2B lead evaluator. You must respond ONLY with a valid JSON object." 
+                },
+                { 
+                    role: "user", 
+                    content: `${prompt}\n\nIMPORTANT: Respond with ONLY a JSON object containing the accepted indices.` 
+                }
+            ],
+            response_format: { type: "json_object" }
+        }, {
             headers: {
                 "Authorization": `Bearer ${apiKey}`,
                 "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model: "llama3-70b-8192",
-                messages: [
-                    { 
-                        role: "system", 
-                        content: "You are a B2B lead evaluator. You must respond ONLY with a valid JSON object." 
-                    },
-                    { 
-                        role: "user", 
-                        content: `${prompt}\n\nIMPORTANT: Respond with ONLY a JSON object containing the accepted indices.` 
-                    }
-                ],
-                response_format: { type: "json_object" }
-            })
+            }
         });
 
-        if (!response.ok) {
-            const errBody = await response.json().catch(() => ({}));
-            throw new Error(`Groq API Error: ${response.status} ${JSON.stringify(errBody)}`);
-        }
-        
-        const data = await response.json();
+        const data = response.data;
         const text = data.choices[0]?.message?.content || "[]";
         // Groq sometimes returns a JSON object with the array inside, or just the array string.
         // We'll try to extract the array.
