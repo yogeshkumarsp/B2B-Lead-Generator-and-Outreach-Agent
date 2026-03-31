@@ -15,7 +15,7 @@ export interface BusinessResult {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TARGET_VALID_LEADS = 25; // 25 total candidates to ensure 10 NEW ones
+const TARGET_VALID_LEADS = 60; // 60 total candidates to ensure 10 NEW ones
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
 const BUSINESS_BLACKLIST = [
