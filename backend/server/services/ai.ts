@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const GROQ_MODEL = "llama3-70b-8192";
 
 export const analyzeReplySentiment = async (content: string): Promise<{ sentiment: string; summary: string }> => {
@@ -64,7 +64,8 @@ export const generateConversationalReply = async (
     settings: any
 ): Promise<{ subject: string; body: string }> => {
     if (!GROQ_API_KEY) {
-        throw new Error('No GROQ_API_KEY found for generating reply');
+        console.error('[AI Service] No GROQ_API_KEY found for generating reply');
+        return { subject: 'Re: Follow up', body: `Hi ${lead.name || 'there'}, thanks for the reply. Let me know when you're free to chat.` };
     }
 
     const persona = settings?.agentPersona || 'You are a professional B2B SDR.';
@@ -120,7 +121,7 @@ Return ONLY a valid JSON object:
         };
     } catch (err: any) {
         console.error('[AI Service] Error generating reply with Groq:', err.response?.data || err.message);
-        throw err;
+        return { subject: 'Follow up', body: 'The AI was unable to generate a personalized response. Please follow up manually.' };
     }
 };
 
@@ -130,8 +131,14 @@ export const generatePersonalizedEmail = async (
     subjectTemplate: string,
     settings: any
 ): Promise<{ subject: string; body: string }> => {
+    const fallback = (t: string) => t.replace(/{company}|{name}|{industry}/gi, lead.companyName || '');
+
     if (!GROQ_API_KEY) {
-        throw new Error('No GROQ_API_KEY found for personalization');
+        console.warn('[AI Service] No GROQ_API_KEY found, using template fallback');
+        return {
+            subject: fallback(subjectTemplate),
+            body: fallback(template)
+        };
     }
 
     const aiTargetKeyword = lead.searchNiche || lead.industry || 'B2B';
@@ -173,13 +180,11 @@ Return strictly as a JSON object:
         const parsed = JSON.parse(text);
         
         return {
-            subject: parsed.subject || subjectTemplate,
-            body: parsed.body || template
+            subject: parsed.subject || fallback(subjectTemplate),
+            body: parsed.body || fallback(template)
         };
     } catch (err: any) {
         console.error('[AI Service] Personalization failed with Groq:', err.response?.data || err.message);
-        // Fallback to basic replacement
-        const fallback = (t: string) => t.replace(/{company}|{name}|{industry}/gi, lead.companyName || '');
         return {
             subject: fallback(subjectTemplate),
             body: fallback(template)
@@ -189,7 +194,8 @@ Return strictly as a JSON object:
 
 export const generateNicheSequence = async (niche: string, location: string): Promise<any[]> => {
     if (!GROQ_API_KEY) {
-        throw new Error('No GROQ_API_KEY found for sequence generation');
+        console.error('[AI Service] No GROQ_API_KEY for sequence generation');
+        return [];
     }
 
     const prompt = `
