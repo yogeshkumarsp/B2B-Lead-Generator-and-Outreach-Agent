@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
-const GROQ_MODEL = "llama3-70b-8192";
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 
 export const analyzeReplySentiment = async (content: string): Promise<{ sentiment: string; summary: string }> => {
     if (!GROQ_API_KEY) {
