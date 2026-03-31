@@ -12,131 +12,13 @@ const router = express.Router();
 router.use(requireAuth);
 
 const localSafetyFilter = (business: any, niche: string): boolean => {
-    const name = (business.name || "").toLowerCase();
-    const type = (business.types?.[0] || "").toLowerCase();
-    const allTypes = (business.types || []).join(", ").toLowerCase();
-    const nicheTarget = niche.toLowerCase();
-
-    // If searching for pharmacy/medicine, don't block based on 'retail' or 'store' keywords
-    const isMedicalSearch = nicheTarget.includes("pharmacy") || nicheTarget.includes("medical") || nicheTarget.includes("medicine") || nicheTarget.includes("hospital");
-
-    // Determine if beauty/salon search
-    const isBeautySearch = nicheTarget.includes("beauty") || nicheTarget.includes("salon") || nicheTarget.includes("parlour") || nicheTarget.includes("spa");
-    
-    // Determine if educational search
-    const isEducationSearch = nicheTarget.includes("school") || nicheTarget.includes("college") || nicheTarget.includes("university") || nicheTarget.includes("institute") || nicheTarget.includes("education") || nicheTarget.includes("academy");
-
-    // Global obvious B2C blacklists
-    let globalBlacklist = [
-        "restaurant", "cafe", "food", "grocery", "supermarket", "furniture",
-        "clothing", "boutique", "salon", "temple", "church", "mosque", "residential", "apartment",
-        "school", "college", "university", "institute", "academy", "training",
-        "placement", "recruitment", "hiring", "consultancy", "staffing"
-    ];
-
-    // Remove blacklist items if specifically searching for them
-    if (isBeautySearch) {
-        globalBlacklist = globalBlacklist.filter(term => !["salon", "boutique"].includes(term));
-    }
-    if (isEducationSearch) {
-        globalBlacklist = globalBlacklist.filter(term => !["school", "college", "university", "institute", "academy"].includes(term));
-    }
-
-    // Only add retail/store to blacklist if it's NOT a medical search
-    if (!isMedicalSearch && !nicheTarget.includes("retail") && !nicheTarget.includes("shop") && !nicheTarget.includes("store")) {
-        globalBlacklist.push("retail", "showroom", "store", "shop", "mall");
-    }
-
-    if (globalBlacklist.some(term => name.includes(term) || type.includes(term) || allTypes.includes(term))) {
-        console.log(`[Filter] Local Reject: "${business.name}" matches blacklist (Type: ${type}, All: ${allTypes})`);
-        return true;
-    }
-
-    // Niche specific exclusion logic
-    if (nicheTarget.includes("it company") || nicheTarget.includes("software") || nicheTarget.includes("agency") || nicheTarget.includes("marketing")) {
-        const itExclusions = [
-            "security system", "cctv", "camera", "appliance", "home automation",
-            "electronics", "hardware shop", "repair shop", "mobile store"
-        ];
-        if (itExclusions.some(term => name.includes(term) || type.includes(term))) return true;
-    }
-
+    // All filters removed as per user request for a "Fresh" experience
     return false;
 };
 
 const filterBusinessesByNiche = async (businesses: any[], niche: string): Promise<any[]> => {
-    // 1. First Pass: Local Safety Filter (Immediate removal of obvious B2C)
-    let filtered = businesses.filter(b => !localSafetyFilter(b, niche));
-
-    if (filtered.length === 0) return filtered;
-
-    try {
-        const apiKey = process.env.GROQ_API_KEY;
-        if (!apiKey) {
-            console.log(`[AI Filter] No GROQ_API_KEY, using local filtered results (${filtered.length})`);
-            return filtered;
-        }
-
-        const isBeautySearch = niche.toLowerCase().includes("beauty") || niche.toLowerCase().includes("salon") || niche.toLowerCase().includes("parlour") || niche.toLowerCase().includes("spa");
-        const isEducationSearch = niche.toLowerCase().includes("school") || niche.toLowerCase().includes("college") || niche.toLowerCase().includes("university") || niche.toLowerCase().includes("institute") || niche.toLowerCase().includes("education") || niche.toLowerCase().includes("academy");
-
-        const prompt = `
-You are a B2B lead evaluator. I am searching for B2B leads for the niche: "${niche}".
-Your goal is to filter out any that are clearly NOT B2B professional services or relevant business entities.
-
-REJECT:
-- Training Centers & Schools (Computer training, Institutes, Schools)
-- HR & Recruitment (Placement agencies, Consultancy firms, Hiring agencies)
-- Job Portals & Staffing firms
-
-ACCEPT:
-- Information Technology / Software / agencies
-- ${niche} related service providers
-- B2B Professional Services
-- Corporate offices
-
-Return ONLY a valid JSON array of the indices (0-based numbers) of the accepted businesses. 
-Businesses:
-${JSON.stringify(filtered.map((b, i) => ({ index: i, name: b.name, types: b.types })), null, 2)}
-`;
-
-        const response = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
-            model: "llama-3.3-70b-versatile",
-            messages: [
-                { 
-                    role: "system", 
-                    content: "You are a B2B lead evaluator. You must respond ONLY with a valid JSON object." 
-                },
-                { 
-                    role: "user", 
-                    content: `${prompt}\n\nIMPORTANT: Respond with ONLY a JSON object containing the accepted indices.` 
-                }
-            ],
-            response_format: { type: "json_object" }
-        }, {
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json"
-            }
-        });
-
-        const data = response.data;
-        const text = data.choices[0]?.message?.content || "[]";
-        // Groq sometimes returns a JSON object with the array inside, or just the array string.
-        // We'll try to extract the array.
-        let parsed = JSON.parse(text);
-        if (!Array.isArray(parsed) && typeof parsed === 'object') {
-            // Check for keys like "accepted_indices", "indices", etc.
-            parsed = parsed.indices || parsed.accepted_indices || Object.values(parsed)[0];
-        }
-        
-        const filteredIndices = Array.isArray(parsed) ? parsed : [];
-        console.log(`[AI Filter] Evaluated ${filtered.length} businesses. Accepted ${filteredIndices.length} for niche "${niche}".`);
-        return filtered.filter((_, i) => filteredIndices.includes(i));
-    } catch (err: any) {
-        console.error("[AI Filter] Groq Filter failed, falling back to all local results:", err?.message || err);
-        return filtered;
-    }
+    // AI Filter disabled as per user request for a "Fresh" experience
+    return businesses;
 };
 
 // POST /api/leads/discover — starts background job
@@ -199,35 +81,16 @@ router.post('/discover', async (req: AuthRequest, res) => {
                         .replace(/[^a-z0-9]/g, '');
                 };
 
-                const finalResultsMap = new Map();
-                cachedLeads.forEach(l => {
-                    const key = `${normalizeName(l.companyName)}_${normalizeName(l.address || "")}`;
-                    finalResultsMap.set(key, l);
-                });
+                // 5. Select the top 10 valid businesses to process for this run
+                const businessesToProcess = businesses.slice(0, 10);
 
-                const uniqueTasks = businesses.filter((business: any) => {
-                    const normName = normalizeName(business.name);
-                    const normAddr = normalizeName(business.address || "");
-                    const uniqueKey = `${normName}_${normAddr}`;
-                    if (finalResultsMap.has(uniqueKey)) return false;
-                    
-                    finalResultsMap.set(uniqueKey, { pending: true });
-                    return true;
-                }).slice(0, 10); // ⚡ Stop the process here: Only pick the first 10 fresh leads
-
-                await Promise.all(uniqueTasks.map(async (business: any) => {
-                    const hasPhone = !!business.phone;
-                    const hasEmail = !!business.email;
-                    
-                    // HIGH = both, LOW = only Email (both are qualified)
-                    const intent = (hasPhone && hasEmail) ? 'HIGH' : 'LOW';
-                    const status = hasEmail ? 'QUALIFIED' : 'UNQUALIFIED';
-
+                // 6. Process only these 10 (Create or Update)
+                const resultsInThisRun = await Promise.all(businessesToProcess.map(async (business: any) => {
                     const normName = normalizeName(business.name);
                     const normAddr = normalizeName(business.address || "");
                     const uniqueKey = `${normName}_${normAddr}`;
 
-                    let existing: any = await prisma.lead.findFirst({
+                    let leadRecord: any = await prisma.lead.findFirst({
                         where: {
                             userId,
                             companyName: { equals: business.name, mode: 'insensitive' },
@@ -235,8 +98,8 @@ router.post('/discover', async (req: AuthRequest, res) => {
                         }
                     });
 
-                    if (!existing) {
-                        const created = await prisma.lead.create({
+                    if (!leadRecord) {
+                        leadRecord = await prisma.lead.create({
                             data: {
                                 userId,
                                 companyName: business.name,
@@ -245,36 +108,29 @@ router.post('/discover', async (req: AuthRequest, res) => {
                                 email: business.email || '',
                                 website: business.website || '',
                                 address: business.address || location,
-                                intent,
-                                status,
-                                campaignId: matchingCampaign?.id, // Zero-Click Auto-Assign!
+                                intent: (business.phone && business.email) ? 'HIGH' : 'LOW',
+                                status: business.email ? 'QUALIFIED' : 'UNQUALIFIED',
+                                campaignId: matchingCampaign?.id,
                                 searchNiche: nicheKey,
                                 searchLocation: locationKey
                             }
                         });
-                        finalResultsMap.set(uniqueKey, created);
-                    } else {
-                        // Even for existing leads, if they aren't assigned, assign them now
-                        if (!existing.campaignId && matchingCampaign) {
-                            existing = await prisma.lead.update({
-                                where: { id: existing.id },
-                                data: { campaignId: matchingCampaign.id }
-                            });
-                        }
-                        finalResultsMap.set(uniqueKey, existing);
+                        console.log(`[Discovery] Created new lead: ${business.name}`);
+                    } else if (!leadRecord.campaignId && matchingCampaign) {
+                        leadRecord = await prisma.lead.update({
+                            where: { id: leadRecord.id },
+                            data: { campaignId: matchingCampaign.id }
+                        });
+                        console.log(`[Discovery] Updated existing lead: ${business.name}`);
                     }
+
+                    return leadRecord;
                 }));
 
-                // Capture the leads we want to show (the top 10 from this specific run)
-                // Only return the NEWLY FOUND or UPDATED results from this specific search run
-                const currentRunLeads = businesses.map((business: any) => {
-                    const normName = normalizeName(business.name);
-                    const normAddr = normalizeName(business.address || "");
-                    const key = `${normName}_${normAddr}`;
-                    return finalResultsMap.get(key);
-                }).filter(l => l && !l.pending).slice(0, 10);
-
-                jobManager.updateJob(jobId, { status: 'COMPLETED', results: currentRunLeads });
+                jobManager.updateJob(jobId, { status: 'COMPLETED', results: resultsInThisRun });
+                
+                // Trigger agent for these specific leads
+                backendAgent.forceProcessUser(userId).catch(e => console.error('[API] Agent trigger error:', e));
             } catch (err: any) {
                 console.error('[Discovery Job] Background error:', err);
                 jobManager.updateJob(jobId, { status: 'FAILED', error: err?.message || 'Unknown discovery error' });
