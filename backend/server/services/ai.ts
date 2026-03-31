@@ -35,8 +35,14 @@ Email Content:
             body: JSON.stringify({
                 model: GROQ_MODEL,
                 messages: [
-                    { role: "system", content: "You are a lead sentiment analyzer. Always respond in valid JSON format." },
-                    { role: "user", content: prompt }
+                    { 
+                        role: "system", 
+                        content: "You are a lead sentiment analyzer. You must respond ONLY with a valid JSON object." 
+                    },
+                    { 
+                        role: "user", 
+                        content: `${prompt}\n\nIMPORTANT: Your response must be a valid JSON object.` 
+                    }
                 ],
                 response_format: { type: "json_object" }
             })
@@ -97,8 +103,14 @@ Return ONLY a valid JSON object:
             body: JSON.stringify({
                 model: GROQ_MODEL,
                 messages: [
-                    { role: "system", content: "You are a helpful assistant that always responds in valid JSON format." },
-                    { role: "user", content: prompt }
+                    { 
+                        role: "system", 
+                        content: "You are a professional B2B email personalization expert. You must respond ONLY with a valid JSON object matching the requested schema." 
+                    },
+                    { 
+                        role: "user", 
+                        content: `${prompt}\n\nIMPORTANT: Your response must be a valid JSON object. Do not include any text outside the JSON structure.` 
+                    }
                 ],
                 response_format: { type: "json_object" }
             })
@@ -210,8 +222,14 @@ Return as a JSON array of objects with: "step", "day_delay", "template_name", "s
             body: JSON.stringify({
                 model: GROQ_MODEL,
                 messages: [
-                    { role: "system", content: "You are an outreach expert. Always respond in valid JSON format." },
-                    { role: "user", content: prompt }
+                    { 
+                        role: "system", 
+                        content: "You are an outreach expert. You must respond ONLY with a valid JSON array or object." 
+                    },
+                    { 
+                        role: "user", 
+                        content: `${prompt}\n\nIMPORTANT: Your response must be valid JSON.` 
+                    }
                 ],
                 response_format: { type: "json_object" }
             })

@@ -108,8 +108,14 @@ ${JSON.stringify(filtered.map((b, i) => ({ index: i, name: b.name, types: b.type
             body: JSON.stringify({
                 model: "llama3-70b-8192",
                 messages: [
-                    { role: "system", content: "You are a B2B lead evaluator. Always respond in valid JSON format." },
-                    { role: "user", content: prompt }
+                    { 
+                        role: "system", 
+                        content: "You are a B2B lead evaluator. You must respond ONLY with a valid JSON object." 
+                    },
+                    { 
+                        role: "user", 
+                        content: `${prompt}\n\nIMPORTANT: Respond with ONLY a JSON object containing the accepted indices.` 
+                    }
                 ],
                 response_format: { type: "json_object" }
             })
