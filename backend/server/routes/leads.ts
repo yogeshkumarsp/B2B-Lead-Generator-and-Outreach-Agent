@@ -132,8 +132,22 @@ router.post('/discover', async (req: AuthRequest, res) => {
                         .replace(/[^a-z0-9]/g, '');
                 };
 
-                // 5. Select the top 10 valid businesses to process for this run
-                const businessesToProcess = businesses.slice(0, 10);
+                // 5. Intelligent Sifter: Prioritize QUALIFIED leads (with emails). 
+                // Goal: Deliver at least 10 with emails if available, otherwise fill with unqualified.
+                const qualified = businesses.filter(b => b.email);
+                const unqualified = businesses.filter(b => !b.email);
+                
+                // If we have 10+ qualified, take up to 15 of them.
+                // If we have fewer than 10 qualified, take all of them and fill with unqualified up to total 15.
+                let businessesToProcess: any[] = [];
+                if (qualified.length >= 10) {
+                    businessesToProcess = qualified.slice(0, 15);
+                } else {
+                    businessesToProcess = [...qualified, ...unqualified.slice(0, 15 - qualified.length)];
+                }
+
+                // Ensure we return exactly what we processed
+                console.log(`[Discovery] Sifting complete: ${qualified.length} qualified found. Processing ${businessesToProcess.length} total.`);
 
                 // 6. Process only these 10 (Create or Update)
                 const resultsInThisRun = await Promise.all(businessesToProcess.map(async (business: any) => {

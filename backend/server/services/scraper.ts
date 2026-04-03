@@ -29,8 +29,9 @@ export const scrapeWebsite = async (url: string): Promise<ScrapedData> => {
         const html = $('body').html() || '';
 
         // Extract Emails
-        const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi;
-        const emails = [...new Set(html.match(emailRegex) || [])];
+        const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi;
+        const matches = html.match(emailRegex) || [];
+        const emails = [...new Set(matches.map(m => m.toLowerCase().replace(/[.,:;!?)\]>]+$/, '').trim()))].filter(e => e.includes('@'));
 
         // Extract Social Links
         const socialLinks: string[] = [];

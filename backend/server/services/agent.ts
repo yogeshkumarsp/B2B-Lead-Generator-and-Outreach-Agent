@@ -87,7 +87,11 @@ export class BackendAutoSDRAgent {
     async forceProcessUser(userId: string) {
         if (this.isProcessing) return;
         if (!(await this.tryAcquireLock())) {
-            console.log('[BackendAgent] Another server instance is already processing. Skipping.');
+            const msg = '[BackendAgent] Another server instance is already processing. Skipping.';
+            console.log(msg);
+            await prisma.agentLog.create({
+                data: { userId, level: 'INFO', module: 'AGENT', message: msg }
+            });
             return;
         }
 
@@ -123,6 +127,10 @@ export class BackendAutoSDRAgent {
             const enabledUsers = await prisma.userSettings.findMany({
                 where: { isAgentEnabled: true }
             });
+
+            if (enabledUsers.length === 0) {
+                 // Even if no users, periodic log to keep lock alive if needed
+            }
 
             for (const settings of enabledUsers) {
                 await this.processUser(settings.userId, settings);
@@ -162,17 +170,38 @@ export class BackendAutoSDRAgent {
             }
         });
 
-        let currentlySent = 0;
-        if (recentLogs >= settings.hourlyThrottleLimit) return;
-
         // AI Cooldown check removed (Migration to Groq)
 
+        await prisma.agentLog.create({
+            data: { userId, level: 'INFO', module: 'OUTREACH', message: `Checking ${campaigns.length} campaigns for ${leads.length} leads...` }
+        });
+
+        let currentlySent = 0;
+        if (recentLogs >= (settings.hourlyThrottleLimit || 10)) {
+            await prisma.agentLog.create({
+                data: { userId, level: 'INFO', module: 'OUTREACH', message: `Hourly throttle reached (${recentLogs}/${settings.hourlyThrottleLimit}). Pausing outreach for 15 mins.` }
+            });
+            return;
+        }
+
+        console.log(`[BackendAgent] Starting outreach for ${campaigns.length} active campaigns. Evaluated ${leads.length} total leads.`);
+        
         for (const campaign of campaigns) {
             const campaignLeads = leads.filter(l =>
                 l.campaignId === campaign.id &&
                 this.canSendOutreach(l, campaign)
             );
 
+            if (campaignLeads.length > 0) {
+                await prisma.agentLog.create({
+                    data: { userId, level: 'INFO', module: 'OUTREACH', message: `Found ${campaignLeads.length} leads ready for ${campaign.name}.`, campaignId: campaign.id }
+                });
+            } else {
+                 await prisma.agentLog.create({
+                    data: { userId, level: 'INFO', module: 'OUTREACH', message: `No leads ready for outreach in "${campaign.name}".`, campaignId: campaign.id }
+                });
+            }
+            
             for (const lead of campaignLeads) {
                 try {
                     if (!lead.email || !lead.email.includes('@')) continue;
@@ -212,7 +241,7 @@ export class BackendAutoSDRAgent {
                     );
 
                     if (!emailRes.success) {
-                        throw new Error(`Failed to send email via Brevo API: ${JSON.stringify(emailRes.error)}`);
+                        throw new Error(`Email provider error: ${emailRes.error || 'Unknown error'}`);
                     }
 
                     // Update Lead Status

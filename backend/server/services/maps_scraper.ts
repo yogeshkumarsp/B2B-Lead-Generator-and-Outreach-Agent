@@ -15,8 +15,27 @@ export interface BusinessResult {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TARGET_VALID_LEADS = 30; // Search 30 candidates to find the first 10 valid ones
-const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+const TARGET_VALID_LEADS = 50; // Increased to ensure 10+ valid ones even in small cities
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi;
+
+function cleanEmail(email: string): string {
+    if (!email) return '';
+    let cleaned = email.toLowerCase().trim();
+    
+    // Remove trailing dots, commas, or common garbage from snippets
+    cleaned = cleaned.replace(/[.,:;!?)\]>]+$/, '');
+    
+    // Remove common prefixes if they got captured
+    const prefixes = ['email:', 'mailto:', 'contact:', 'info:', 'at:'];
+    for (const p of prefixes) {
+        if (cleaned.startsWith(p)) cleaned = cleaned.slice(p.length);
+    }
+    
+    // Final check for common garbage patterns
+    if (cleaned.includes('example.com') || cleaned.includes('noreply') || cleaned.length < 5) return '';
+    
+    return cleaned.trim();
+}
 
 const BUSINESS_BLACKLIST: string[] = []; // All restrictions removed for a "Fresh" experience
 
@@ -53,11 +72,11 @@ async function findEmailViaSearch(bizName: string, location: string, domain?: st
     try {
         // Combined Mega-Query to save credits while maintaining high hit rate
         const combinedQuery = domain 
-            ? `(email OR contact OR "info") site:${domain} OR "${bizName}" ${location} email contact`
-            : `"${bizName}" ${location} official contact email`;
+            ? `(email OR contact OR "info" OR "reach out" OR "@${domain}" OR "mailto:") site:${domain} OR "${bizName}" ${location} email contact`
+            : `"${bizName}" ${location} "email" "contact" "gmail.com" "official"`;
         
         const response = await axios.post('https://google.serper.dev/search', 
-            { q: combinedQuery, num: 8 }, 
+            { q: combinedQuery, num: 15 }, // Increased from 8 to 15 for better coverage
             { headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' } }
         );
 
@@ -68,17 +87,18 @@ async function findEmailViaSearch(bizName: string, location: string, domain?: st
                 allText += ' ' + (item.snippet || '') + ' ' + (item.title || '') + ' ' + (item.link || '');
             }
         }
+        if (results.knowledgeGraph) {
+            allText += ' ' + JSON.stringify(results.knowledgeGraph);
+        }
         
         const matches = allText.match(EMAIL_REGEX);
         if (matches && matches.length > 0) {
-            const blacklisted = ['example.com', 'noreply', 'support@google', 'wixpress', 'sentry.io', '.png', '.jpg', '.gif'];
-            const valid = matches.filter(m => {
-                const low = m.toLowerCase();
-                return !blacklisted.some(b => low.includes(b));
-            });
+            const valid = matches
+                .map(m => cleanEmail(m))
+                .filter(m => m && m.includes('@'));
             
             if (valid.length > 0) {
-                const unique = Array.from(new Set(valid.map(e => e.toLowerCase())));
+                const unique = Array.from(new Set(valid));
                 if (domain) {
                     const companyEmail = unique.find(e => e.includes(domain));
                     if (companyEmail) return companyEmail;
@@ -106,11 +126,11 @@ export async function searchBusinesses(keyword: string, location: string, radius
     const relatedTerms: string[] = [`${keyword} in ${location}`];
     
     if (baseQuery.includes('software') || baseQuery.includes('it') || baseQuery.includes('tech')) {
-        relatedTerms.push(`Web Design agency in ${location}`, `App Development in ${location}`, `Custom Software Development in ${location}`, `SaaS Development in ${location}`);
+        relatedTerms.push(`Web Design agency in ${location}`, `App Development in ${location}`, `Custom Software Development in ${location}`, `SaaS Development in ${location}`, `IT Consulting in ${location}`);
     } else if (baseQuery.includes('marketing') || baseQuery.includes('ad')) {
-        relatedTerms.push(`SEO agency in ${location}`, `Social Media Marketing in ${location}`, `Branding agency in ${location}`, `Advertising agency in ${location}`);
+        relatedTerms.push(`SEO agency in ${location}`, `Social Media Marketing in ${location}`, `Branding agency in ${location}`, `Advertising agency in ${location}`, `Digital Marketing consultant in ${location}`, `PPC agency in ${location}`);
     } else {
-        relatedTerms.push(`${keyword} services in ${location}`, `${keyword} company in ${location}`, `Top ${keyword} in ${location}`);
+        relatedTerms.push(`${keyword} services in ${location}`, `${keyword} company in ${location}`, `Top ${keyword} in ${location}`, `${keyword} agency in ${location}`);
     }
 
     console.log(`[Serper] ⭐ EXPANDED SEARCH: Fetching from 5 keyword streams in "${location}"...`);
@@ -136,7 +156,7 @@ export async function searchBusinesses(keyword: string, location: string, radius
             if (key) uniquePlacesMap.set(key, p);
         }
 
-        const candidates_raw = Array.from(uniquePlacesMap.values()).slice(0, 50);
+        const candidates_raw = Array.from(uniquePlacesMap.values()).slice(0, 80); // Evaluating up to 80 candidates for high city volume
         console.log(`[Serper] Found ${candidates_raw.length} unique candidates. Starting Scavenger...`);
 
         // 2. Stage 2: Parallel Email Scavenging

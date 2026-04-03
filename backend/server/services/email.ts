@@ -1,7 +1,24 @@
-import axios from 'axios';
+import nodemailer from 'nodemailer';
 
-const BREVO_API_KEY = process.env.BREVO_API_KEY || process.env.SENDGRID_API_KEY || '';
-const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || process.env.SENDGRID_SENDER_EMAIL || '';
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+const SMTP_PORT = Number(process.env.SMTP_PORT) || 465;
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || SMTP_USER || '';
+
+// Create SMTP Transporter
+const transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_PORT === 465, // Use SSL for 465
+    auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS
+    },
+    tls: {
+        rejectUnauthorized: false
+    }
+});
 
 export const sendOutreachEmail = async (
     to: string, 
@@ -10,9 +27,9 @@ export const sendOutreachEmail = async (
     fromName?: string, 
     fromEmail?: string
 ): Promise<{ success: boolean; error?: any }> => {
-    if (!BREVO_API_KEY) {
-        console.warn('[Email] Skipping send: BREVO_API_KEY not found in environment.');
-        return { success: false, error: 'No API Key' };
+    if (!SMTP_USER || !SMTP_PASS) {
+        console.warn('[Email] Skipping send: SMTP_USER or SMTP_PASS not found in environment.');
+        return { success: false, error: 'No SMTP credentials' };
     }
 
     const senderEmail = fromEmail || BREVO_SENDER_EMAIL;
@@ -21,34 +38,24 @@ export const sendOutreachEmail = async (
         return { success: false, error: 'No Sender Email' };
     }
 
-    console.log(`[Email] Preparing to send via Brevo to: ${to} from: ${senderEmail}`);
+    console.log(`[Email] Preparing to send via SMTP to: ${to} from: ${senderEmail}`);
 
     try {
-        const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
-            sender: {
+        const info = await transporter.sendMail({
+            from: {
                 name: fromName || 'AutoSDR Outreach',
-                email: senderEmail
+                address: senderEmail
             },
-            to: [
-                {
-                    email: to
-                }
-            ],
+            to: to,
             subject: subject,
-            htmlContent: body
-        }, {
-            headers: {
-                'api-key': BREVO_API_KEY,
-                'Content-Type': 'application/json'
-            }
+            html: body
         });
 
-        console.log(`[Email] Successfully sent via Brevo to ${to}`);
+        console.log(`[Email] Successfully sent via SMTP to ${to}. MessageId: ${info.messageId}`);
         return { success: true };
     } catch (err: any) {
-        const errorData = err.response?.data || err.message;
-        console.error('[Email] Failed to send email via Brevo:', JSON.stringify(errorData, null, 2));
-        return { success: false, error: errorData };
+        console.error('[Email] Failed to send email via SMTP:', err?.message || err);
+        return { success: false, error: err?.message || 'Unknown SMTP error' };
     }
 };
 
