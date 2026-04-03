@@ -161,12 +161,12 @@ export class BackendAutoSDRAgent {
     private async runCampaignOutreach(userId: string, leads: any[], campaigns: any[], settings: any) {
         // Check hourly throttle
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-        const recentLogs = await prisma.agentLog.count({
+        const recentSentLogs = await prisma.agentLog.count({
             where: {
                 userId,
                 module: 'OUTREACH',
                 timestamp: { gte: oneHourAgo },
-                message: { contains: 'ready' }
+                message: { contains: 'Successfully sent email' }
             }
         });
 
@@ -177,9 +177,9 @@ export class BackendAutoSDRAgent {
         });
 
         let currentlySent = 0;
-        if (recentLogs >= (settings.hourlyThrottleLimit || 10)) {
+        if (recentSentLogs >= (settings.hourlyThrottleLimit || 10)) {
             await prisma.agentLog.create({
-                data: { userId, level: 'INFO', module: 'OUTREACH', message: `Hourly throttle reached (${recentLogs}/${settings.hourlyThrottleLimit}). Pausing outreach for 15 mins.` }
+                data: { userId, level: 'INFO', module: 'OUTREACH', message: `Hourly throttle reached (${recentSentLogs}/${settings.hourlyThrottleLimit}). Pausing outreach for 15 mins.` }
             });
             return;
         }
@@ -282,10 +282,10 @@ export class BackendAutoSDRAgent {
                     });
 
                     currentlySent++;
-                    if (recentLogs + currentlySent >= settings.hourlyThrottleLimit) break;
+                    if (recentSentLogs + currentlySent >= settings.hourlyThrottleLimit) break;
                     
-                    // Mandatory 6-second delay to protect API quota between sends
-                    await new Promise(resolve => setTimeout(resolve, 6000));
+                    // Mandatory 1-second delay to protect API quota between sends
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 } catch (err: any) {
                     console.error(`[BackendAgent] Failed to process lead ${lead.id}:`, err);
                     await prisma.agentLog.create({
@@ -299,7 +299,7 @@ export class BackendAutoSDRAgent {
                 }
             } // end lead loop
 
-            if (recentLogs + currentlySent >= settings.hourlyThrottleLimit) break;
+            if (recentSentLogs + currentlySent >= settings.hourlyThrottleLimit) break;
         } // end campaign loop
     }
 
