@@ -45,7 +45,8 @@ Email Content:
             headers: {
                 "Authorization": `Bearer ${GROQ_API_KEY}`,
                 "Content-Type": "application/json"
-            }
+            },
+            timeout: 15000
         });
 
         const data = response.data;
@@ -107,7 +108,8 @@ Return ONLY a valid JSON object:
             headers: {
                 "Authorization": `Bearer ${GROQ_API_KEY}`,
                 "Content-Type": "application/json"
-            }
+            },
+            timeout: 15000
         });
 
         const data = response.data;
@@ -172,7 +174,8 @@ Return strictly as a JSON object:
             headers: {
                 "Authorization": `Bearer ${GROQ_API_KEY}`,
                 "Content-Type": "application/json"
-            }
+            },
+            timeout: 15000
         });
 
         const data = response.data;
@@ -223,7 +226,8 @@ Return as a JSON array of objects with: "step", "day_delay", "template_name", "s
             headers: {
                 "Authorization": `Bearer ${GROQ_API_KEY}`,
                 "Content-Type": "application/json"
-            }
+            },
+            timeout: 15000
         });
 
         const data = response.data;

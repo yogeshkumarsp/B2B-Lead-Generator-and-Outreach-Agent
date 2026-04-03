@@ -204,6 +204,9 @@ export class BackendAutoSDRAgent {
             
             for (const lead of campaignLeads) {
                 try {
+                    await prisma.agentLog.create({
+                        data: { userId, level: 'INFO', module: 'OUTREACH', message: `Processing lead: ${lead.company} (${lead.email})`, leadId: lead.id, campaignId: campaign.id }
+                    });
                     if (!lead.email || !lead.email.includes('@')) continue;
 
                     const nextStepIndex = lead.outreachStatus === 'SENT' ? lead.currentStep : 0;
@@ -243,6 +246,17 @@ export class BackendAutoSDRAgent {
                     if (!emailRes.success) {
                         throw new Error(`Email provider error: ${emailRes.error || 'Unknown error'}`);
                     }
+
+                    await prisma.agentLog.create({
+                        data: {
+                            userId,
+                            level: 'ACTION',
+                            module: 'OUTREACH',
+                            message: `Successfully sent email to ${lead.email}`,
+                            leadId: lead.id,
+                            campaignId: campaign.id
+                        }
+                    });
 
                     // Update Lead Status
                     await prisma.lead.update({
