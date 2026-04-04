@@ -208,7 +208,8 @@ const Campaigns: React.FC = () => {
         <Card title="Create New Campaign">
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input label="Description" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Brief purpose of this campaign..." className="col-span-2" />
+              <Input label="Campaign Name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Real Estate - West Coast" className="col-span-1" />
+              <Input label="Description" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Brief purpose..." className="col-span-1" />
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-slate-600">Email Template</label>

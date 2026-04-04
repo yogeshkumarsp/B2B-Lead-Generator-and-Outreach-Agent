@@ -67,6 +67,7 @@ export class BackendAutoSDRAgent {
                 const diffMs = now.getTime() - new Date(lock.updatedAt).getTime();
                 // If the lock is less than 60 seconds old, another process is likely active
                 if (diffMs < 60000) {
+                    console.log(`[BackendAgent] Lock is active (updated ${Math.round(diffMs / 1000)}s ago).`);
                     return false;
                 }
             }
@@ -81,6 +82,19 @@ export class BackendAutoSDRAgent {
         } catch (err) {
             console.error('[BackendAgent] Error acquiring lock:', err);
             return true; // Fallback to allow processing if DB has issues
+        }
+    }
+
+    private async releaseLock() {
+        try {
+            // Set updatedAt to long ago to effectively release it
+            await prisma.systemLock.upsert({
+                where: { id: 'AGENT_LOCK' },
+                update: { updatedAt: new Date(0) },
+                create: { id: 'AGENT_LOCK' }
+            });
+        } catch (err) {
+            console.error('[BackendAgent] Error releasing lock:', err);
         }
     }
 
@@ -111,6 +125,7 @@ export class BackendAutoSDRAgent {
             await this.processUser(userId, settings);
         } finally {
             this.isProcessing = false;
+            await this.releaseLock();
         }
     }
 
@@ -139,6 +154,7 @@ export class BackendAutoSDRAgent {
             console.error('[BackendAgent] Process error:', error);
         } finally {
             this.isProcessing = false;
+            await this.releaseLock();
         }
     }
 

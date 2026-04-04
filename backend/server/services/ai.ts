@@ -197,8 +197,12 @@ Return strictly as a JSON object:
 
 export const generateNicheSequence = async (niche: string, location: string): Promise<any[]> => {
     if (!GROQ_API_KEY) {
-        console.error('[AI Service] No GROQ_API_KEY for sequence generation');
-        return [];
+        console.warn('[AI Service] No GROQ_API_KEY for sequence generation, using static fallback');
+        return [
+            { step: 1, day_delay: 0, template_name: 'Intro', subject: 'Connecting for {{niche}} opportunity', body: 'Hi {{name}},\n\nI noticed your work at {{company}}. I would love to discuss how our solutions can help you in the {{niche}} industry.\n\nBest, Alex' },
+            { step: 2, day_delay: 2, template_name: 'Follow up', subject: 'Re: Connecting', body: 'Hi {{name}},\n\nJust following up on my previous message. Are you free for a quick 5-min chat next week?\n\nBest, Alex' },
+            { step: 3, day_delay: 5, template_name: 'Final touch', subject: 'One last thought', body: 'Hi {{name}},\n\nI haven\'t heard back, so I\'ll assume the timing isn\'t right. Let me know if you ever need help with {{niche}} at {{company}}.\n\nBest, Alex' }
+        ];
     }
 
     const prompt = `
