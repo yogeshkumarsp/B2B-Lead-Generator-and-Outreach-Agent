@@ -43,6 +43,13 @@ export const sendOutreachEmail = async (
     const senderEmail = fromEmail || BREVO_SENDER_EMAIL;
     const senderName = fromName || 'AutoSDR Outreach';
 
+    // Ensure the body has paragraph spacing if it's plain text being sent as HTML
+    // Replace double newlines with paragraph tags if not already HTML-like
+    let processedBody = body;
+    if (!body.toLowerCase().includes('<p') && !body.toLowerCase().includes('<br')) {
+        processedBody = body.split('\n').filter(line => line.trim()).map(line => `<p style="margin-bottom: 1em;">${line}</p>`).join('');
+    }
+
     // 1. Try Gmail API first (most reliable on cloud platforms)
     const oauth2Client = getOAuth2Client();
     if (oauth2Client) {
@@ -50,15 +57,16 @@ export const sendOutreachEmail = async (
         try {
             const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
             
-            // Construct MIME message
+            // Construct MIME message following RFC 822 standard with \r\n
+            const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
             const str = [
-                `Content-Type: text/html; charset="UTF-8"\n`,
-                `MIME-Version: 1.0\n`,
-                `Content-Transfer-Encoding: 7bit\n`,
-                `to: ${to}\n`,
-                `from: ${senderName} <${senderEmail}>\n`,
-                `subject: ${subject}\n\n`,
-                body
+                `Content-Type: text/html; charset="UTF-8"\r\n`,
+                `MIME-Version: 1.0\r\n`,
+                `Content-Transfer-Encoding: 7bit\r\n`,
+                `to: ${to}\r\n`,
+                `from: ${senderName} <${senderEmail}>\r\n`,
+                `subject: ${utf8Subject}\r\n\r\n`,
+                processedBody
             ].join('');
 
             const encodedMessage = encodeMessage(str);
