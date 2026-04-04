@@ -2,27 +2,13 @@ import { google } from 'googleapis';
 import { prisma } from '../db.js';
 import { analyzeReplySentiment, generateConversationalReply } from './ai.js';
 import { sendOutreachEmail } from './email.js';
-
-const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID || '';
-const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET || '';
-const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN || '';
+import { getOAuth2Client } from './google_auth.js';
 
 export class ReplyDetector {
     private isRunning = false;
     private intervalId: NodeJS.Timeout | null = null;
-    private oauth2Client: any = null;
 
-    constructor() {
-        if (GMAIL_CLIENT_ID && GMAIL_CLIENT_SECRET && GMAIL_REFRESH_TOKEN) {
-            this.oauth2Client = new google.auth.OAuth2(
-                GMAIL_CLIENT_ID,
-                GMAIL_CLIENT_SECRET
-            );
-            this.oauth2Client.setCredentials({
-                refresh_token: GMAIL_REFRESH_TOKEN
-            });
-        }
-    }
+    constructor() { }
 
     private async tryAcquireLock(): Promise<boolean> {
         try {
@@ -54,7 +40,7 @@ export class ReplyDetector {
         this.isRunning = true;
         console.log('[ReplyDetector] Starting Gmail API reply detection...');
 
-        if (!this.oauth2Client) {
+        if (!getOAuth2Client()) {
             console.warn('[ReplyDetector] GMAIL tokens missing. Detector will idle.');
             return;
         }
@@ -72,11 +58,12 @@ export class ReplyDetector {
     }
 
     private async checkReplies() {
-        if (!this.oauth2Client) return;
+        const oauth2Client = getOAuth2Client();
+        if (!oauth2Client) return;
         if (!(await this.tryAcquireLock())) return;
 
         try {
-            const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client });
+            const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
             
             // Search for unread messages (is:unread)
             const res = await gmail.users.messages.list({
@@ -98,8 +85,8 @@ export class ReplyDetector {
                 });
 
                 const headers = fullMsg.data.payload?.headers || [];
-                const fromHeader = headers.find(h => h.name?.toLowerCase() === 'from')?.value || '';
-                const subjectHeader = headers.find(h => h.name?.toLowerCase() === 'subject')?.value || '';
+                const fromHeader = headers.find((h: any) => h.name?.toLowerCase() === 'from')?.value || '';
+                const subjectHeader = headers.find((h: any) => h.name?.toLowerCase() === 'subject')?.value || '';
                 
                 // Extract clean email from "Name <email@domain.com>"
                 const fromMatch = fromHeader.match(/<(.+)>|(\S+@\S+)/);
