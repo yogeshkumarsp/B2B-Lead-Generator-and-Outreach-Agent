@@ -20,7 +20,7 @@ const Campaigns: React.FC = () => {
   // Form State
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
-  const [newTemplate, setNewTemplate] = useState("Hi {{name}},\n\nI noticed your work at {{company}}. I'd love to discuss how we can help you as a {{title}}.\n\nBest, Alex");
+  const [newTemplate, setNewTemplate] = useState(`Hi {name},\n\nI came across {company} while researching IT companies in {city}.\n\nI’m the creator of an AI-powered outreach automation tool that helps IT businesses discover new prospects and send personalized messages automatically.\n\nI'm reaching out to see if your team is looking to automate your lead generation process.\n\nWould love to hear how you currently handle this.\n\nBest,\nYogesh Kumar`);
 
   useEffect(() => {
     refreshData();

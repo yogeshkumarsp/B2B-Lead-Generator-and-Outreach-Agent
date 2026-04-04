@@ -133,7 +133,13 @@ export const generatePersonalizedEmail = async (
     subjectTemplate: string,
     settings: any
 ): Promise<{ subject: string; body: string }> => {
-    const fallback = (t: string) => t.replace(/{company}|{name}|{industry}/gi, lead.companyName || '');
+    const fallback = (t: string) => {
+        return t
+            .replace(/{company}|{{company}}/gi, lead.companyName || lead.name || 'your company')
+            .replace(/{name}|{{name}}/gi, lead.name || lead.companyName || 'valued partner')
+            .replace(/{industry}|{{industry}}/gi, lead.industry || lead.searchNiche || 'your industry')
+            .replace(/{city}|{{city}}/gi, lead.address || lead.searchLocation || 'your city');
+    };
 
     if (!GROQ_API_KEY) {
         console.warn('[AI Service] No GROQ_API_KEY found, using template fallback');
@@ -199,9 +205,9 @@ export const generateNicheSequence = async (niche: string, location: string): Pr
     if (!GROQ_API_KEY) {
         console.warn('[AI Service] No GROQ_API_KEY for sequence generation, using static fallback');
         return [
-            { step: 1, day_delay: 0, template_name: 'Intro', subject: 'Connecting for {{niche}} opportunity', body: 'Hi {{name}},\n\nI noticed your work at {{company}}. I would love to discuss how our solutions can help you in the {{niche}} industry.\n\nBest, Alex' },
-            { step: 2, day_delay: 2, template_name: 'Follow up', subject: 'Re: Connecting', body: 'Hi {{name}},\n\nJust following up on my previous message. Are you free for a quick 5-min chat next week?\n\nBest, Alex' },
-            { step: 3, day_delay: 5, template_name: 'Final touch', subject: 'One last thought', body: 'Hi {{name}},\n\nI haven\'t heard back, so I\'ll assume the timing isn\'t right. Let me know if you ever need help with {{niche}} at {{company}}.\n\nBest, Alex' }
+            { step: 1, day_delay: 0, template_name: 'Intro', subject: 'Automating {company}\'s prospect discovery', body: 'Hi {name},\n\nI came across {company} while researching IT companies in {city}.\n\nI’m the creator of an AI-powered outreach automation tool that helps IT businesses discover new prospects and send personalized messages automatically.\n\nI\'m reaching out to see if your team is looking to automate your lead generation process.\n\nWould love to hear how you currently handle this.\n\nBest,\nYogesh Kumar' },
+            { step: 2, day_delay: 2, template_name: 'Problem', subject: 'Many IT companies struggle with manual outreach', body: 'Hi {name},\n\nMany IT companies spend hours manually finding prospects and sending outreach emails.\n\nWe built a platform that automates lead discovery and AI lead scoring so you can focus on building relationships.\n\nCurious to know — how does {company} currently generate new B2B leads?\n\nBest,\nYogesh Kumar' },
+            { step: 3, day_delay: 5, template_name: 'Follow up', subject: 'AI agents for {company}\'s sales team', body: 'Hi {name},\n\nI’m developing a platform that helps businesses automatically find B2B leads and run personalized outreach campaigns using AI agents.\n\nSince you’re at {company}, I thought you\'d be interested in seeing how we automate the top of the sales funnel.\n\nDo you think a tool like this could help your team improve their efficiency?\n\nBest regards,\nYogesh Kumar' }
         ];
     }
 
