@@ -1,10 +1,10 @@
 
 export const DEFAULT_SETTINGS = {
   senderName: "Yogesh Kumar",
-  senderEmail: "yogesh@autosdr.com",
-  agentPersona: "You are a Sales Development Representative for AutoSDR, an AI-powered lead generation platform. Your goal is to help IT service companies automate their client acquisition. Always identify as the creator/provider of this automation tool. Maintain a brief, professional, and results-oriented tone.",
-  dailySendLimit: 50,
-  hourlyThrottleLimit: 5,
+  senderEmail: "yogeshkumarsp03@gmail.com",
+  agentPersona: "You are a Sales Development Representative for AutoSDR. Your goal is to help businesses automate their client acquisition. Maintain a brief, professional, and results-oriented tone.",
+  dailySendLimit: 100,
+  hourlyThrottleLimit: 50,
   replyDetectionIntervalMinutes: 30,
   isAgentEnabled: false,
 };
@@ -12,12 +12,11 @@ export const DEFAULT_SETTINGS = {
 export const SAMPLE_CAMPAIGNS = [
   {
     id: 'c1',
-    name: 'SaaS Decision Makers',
-    description: 'Targeting CTOs and VPs of Engineering at high-growth SaaS companies.',
-    scoreThreshold: 70,
-    template: "Hi {{name}},\n\nI noticed your work at {{company}}. Given your role as {{title}}, I thought you might be interested in how we're streamlining B2B outreach.\n\nBest,\nAlex",
-    followUpDelayDays: 3,
-    maxDailySends: 20,
+    name: 'IT Services Outreach',
+    description: 'Targeting IT decision makers for automation services.',
+    template: "Hi {name},\n\nI came across {company} while researching. Would love to discuss how we can help you automate your outreach.\n\nBest,\nYogesh Kumar",
+    followUpDelayDays: 2,
+    maxDailySends: 50,
     status: 'ACTIVE' as const,
     createdAt: Date.now(),
   }

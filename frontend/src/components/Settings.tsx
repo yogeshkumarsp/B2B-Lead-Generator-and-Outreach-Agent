@@ -161,7 +161,7 @@ const Settings: React.FC = () => {
                  <div className="flex items-center justify-between">
                     <div className="flex flex-col">
                         <span className="text-sm font-semibold text-slate-700">Autonomous SDR Agent</span>
-                        <span className="text-xs text-slate-500 italic">When enabled, the agent will automatically score leads and send outreach.</span>
+                        <span className="text-xs text-slate-500 italic">When enabled, the agent will automatically trigger outreach for qualified leads.</span>
                     </div>
                     <div 
                       onClick={() => setSettings({ ...settings, isAgentEnabled: !settings.isAgentEnabled })}

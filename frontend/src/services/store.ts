@@ -185,7 +185,6 @@ class Store {
       website: 'Website',
       address: 'Location',
       industry: 'Industry',
-      score: 'Lead Score',
       status: 'Qualified Status'
     };
 
