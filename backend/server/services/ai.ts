@@ -82,6 +82,7 @@ The lead just replied: "${replyText}" (Sentiment: ${sentiment})
 Task: Write a conversational, concise email response (under 4 sentences).
 - If INTERESTED: Suggest a 5-10 min call and ask for availability.
 - If NOT_INTERESTED: Polite and brief closing.
+- SPACING: Use double newlines (\\n\\n) between the greeting, body, and sign-off.
 
 Return ONLY a valid JSON object:
 {
@@ -163,6 +164,7 @@ Lead Details:
 
 Task: Write a highly personalized B2B outreach email based on the templates. 
 CRITICAL: Use the templates as a structural framework, but write an intelligent, industry-specific email. Avoid all brackets like {company}.
+SPACING: You MUST use double newlines (\\n\\n) between the greeting, every paragraph, and the sign-off. The message must NOT be one solid block.
 
 Return strictly as a JSON object:
 {"subject": "personalized subject", "body": "personalized email body"}
@@ -214,6 +216,7 @@ export const generateNicheSequence = async (niche: string, location: string): Pr
     const prompt = `
 Create a professional 5-step B2B outreach sequence for the niche: "${niche}" in "${location}".
 Focus: Selling an AI-powered outreach automation platform.
+SPACING: You MUST use double newlines (\\n\\n) between the greeting, body paragraphs, and the sign-off in every "body" field.
 
 Return as a JSON array of objects with: "step", "day_delay", "template_name", "subject", "body".
 `;
