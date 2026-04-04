@@ -43,23 +43,77 @@ const BUSINESS_BLACKLIST: string[] = []; // All restrictions removed for a "Fres
 
 function cleanBusinessName(name: string): string {
     if (!name) return '';
-    const separators = [' | ', ' - ', ' – ', ' : ', ' — ', ' • ', '|'];
+    const separators = [' | ', ' - ', ' – ', ' : ', ' — ', ' • ', '|', ' , ', ', '];
     let cleaned = name;
+    
+    // 1. Initial Split-Cleaning
     for (const sep of separators) {
         if (cleaned.includes(sep)) {
-            const potential = cleaned.split(sep)[0].trim();
-            if (potential.length > 2) { cleaned = potential; break; }
+            const parts = cleaned.split(sep).map(p => p.trim());
+            // If the first part is substantial and the second is a repeat or descriptive, take the first
+            if (parts[0].length > 2) {
+                if (parts[1] && parts[0].toLowerCase() === parts[1].toLowerCase()) {
+                    cleaned = parts[0];
+                    break;
+                }
+                cleaned = parts[0];
+                break;
+            }
         }
     }
-    const descriptive = ['digital marketing', 'website designing', 'web design', 'software company', 'it services', 'consultancy', 'seo agency', 'social media', 'agency', 'company'];
-    const lower = cleaned.toLowerCase();
+
+    const descriptive = [
+        'digital marketing', 'website designing', 'web design', 'software company', 
+        'it services', 'consultancy', 'seo agency', 'social media', 'agency', 
+        'company', 'pvt ltd', 'private limited', 'solutions'
+    ];
+    
+    let lower = cleaned.toLowerCase();
     for (const phrase of descriptive) {
         const idx = lower.indexOf(phrase);
+        // If phrase is at the end or following a separator, trim it
         if (idx > 3) {
-            cleaned = cleaned.slice(0, idx).replace(/[\s\-|:.\/–—•]+$/, '').trim();
+            cleaned = cleaned.slice(0, idx).replace(/[\s\-|:.\/–—•,]+$/, '').trim();
+            lower = cleaned.toLowerCase();
         }
     }
     return cleaned.trim();
+}
+
+function cleanAddress(address: string): string {
+    if (!address) return '';
+    // 1. Split by comma and clean
+    const parts = address.split(',').map(p => p.trim()).filter(p => p.length > 0);
+    
+    // 2. Case-Insensitive Deduplication & Redundancy Check
+    const uniqueParts: string[] = [];
+    const seenLower = new Set<string>();
+
+    for (const part of parts) {
+        const lower = part.toLowerCase();
+        
+        // Skip exact duplicates
+        if (seenLower.has(lower)) continue;
+
+        // Skip if this part is fully contained within another part (e.g. "Krishnagiri" vs "Krishnagiri DT")
+        // but only if the shorter part is redundant.
+        let isRedundant = false;
+        for (const existing of uniqueParts) {
+            const extLower = existing.toLowerCase();
+            if (extLower.includes(lower) || lower.includes(extLower)) {
+                // If one is just a shorter version of the other, we stick to the more descriptive one
+                if (extLower.length >= lower.length) isRedundant = true;
+                // If current is longer/more descriptive, it will replace or we can just keep unique ones
+            }
+        }
+        
+        if (isRedundant) continue;
+
+        uniqueParts.push(part);
+        seenLower.add(lower);
+    }
+    
+    return uniqueParts.join(', ');
 }
 
 /**
@@ -173,7 +227,7 @@ export async function searchBusinesses(keyword: string, location: string, radius
             }
 
             const website = place.website;
-            const address = place.address || 'Address not found';
+            const address = cleanAddress(place.address || 'Address not found');
             const phone = place.phoneNumber ? place.phoneNumber.replace(/\D/g, '').slice(-10) : undefined;
             const place_id = place.cid || 'serp_' + (place.title || '').replace(/\s/g, '_');
             const types = place.category ? [place.category] : [];
